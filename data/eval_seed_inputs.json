@@ -1,0 +1,357 @@
+{
+  "version": "v1.0",
+  "description": "Demo dataset for early_evals batch runs. 50 seed inputs across various domains.",
+  "created_at": "2024-12-22",
+  "inputs": [
+    {
+      "id": "seed_001",
+      "role": "user",
+      "goal": "log in securely using my email and password",
+      "benefit": "access my personalized dashboard and data",
+      "context": { "domain": "authentication", "complexity": "medium" }
+    },
+    {
+      "id": "seed_002",
+      "role": "new visitor",
+      "goal": "create an account with my email address",
+      "benefit": "start using the platform and save my preferences",
+      "context": { "domain": "authentication", "complexity": "medium" }
+    },
+    {
+      "id": "seed_003",
+      "role": "forgetful user",
+      "goal": "reset my password via email",
+      "benefit": "regain access to my account without contacting support",
+      "context": { "domain": "authentication", "complexity": "medium" }
+    },
+    {
+      "id": "seed_004",
+      "role": "security-conscious user",
+      "goal": "enable two-factor authentication on my account",
+      "benefit": "protect my account from unauthorized access",
+      "context": { "domain": "authentication", "complexity": "high" }
+    },
+    {
+      "id": "seed_005",
+      "role": "enterprise user",
+      "goal": "log in using my company's SSO provider",
+      "benefit": "use a single set of credentials across all work tools",
+      "context": { "domain": "authentication", "complexity": "high" }
+    },
+    {
+      "id": "seed_006",
+      "role": "departing user",
+      "goal": "log out from all devices",
+      "benefit": "ensure no one else can access my account",
+      "context": { "domain": "authentication", "complexity": "low" }
+    },
+    {
+      "id": "seed_007",
+      "role": "returning user",
+      "goal": "stay logged in across browser sessions",
+      "benefit": "avoid re-entering credentials every time I visit",
+      "context": { "domain": "authentication", "complexity": "low" }
+    },
+    {
+      "id": "seed_008",
+      "role": "admin",
+      "goal": "unlock a user account after too many failed login attempts",
+      "benefit": "help users regain access without compromising security",
+      "context": { "domain": "authentication", "complexity": "medium" }
+    },
+    {
+      "id": "seed_009",
+      "role": "shopper",
+      "goal": "add items to my shopping cart",
+      "benefit": "collect products before purchasing",
+      "context": { "domain": "ecommerce", "complexity": "low" }
+    },
+    {
+      "id": "seed_010",
+      "role": "customer",
+      "goal": "complete checkout with my saved payment method",
+      "benefit": "purchase items quickly without re-entering card details",
+      "context": { "domain": "ecommerce", "complexity": "medium" }
+    },
+    {
+      "id": "seed_011",
+      "role": "customer",
+      "goal": "apply a discount coupon to my order",
+      "benefit": "save money on my purchase",
+      "context": { "domain": "ecommerce", "complexity": "low" }
+    },
+    {
+      "id": "seed_012",
+      "role": "buyer",
+      "goal": "track the delivery status of my order",
+      "benefit": "know when to expect my package",
+      "context": { "domain": "ecommerce", "complexity": "medium" }
+    },
+    {
+      "id": "seed_013",
+      "role": "dissatisfied customer",
+      "goal": "request a refund for a defective product",
+      "benefit": "get my money back without hassle",
+      "context": { "domain": "ecommerce", "complexity": "high" }
+    },
+    {
+      "id": "seed_014",
+      "role": "window shopper",
+      "goal": "save products to a wishlist",
+      "benefit": "remember items I want to buy later",
+      "context": { "domain": "ecommerce", "complexity": "low" }
+    },
+    {
+      "id": "seed_015",
+      "role": "shopper",
+      "goal": "search for products by keyword and category",
+      "benefit": "quickly find what I'm looking for",
+      "context": { "domain": "ecommerce", "complexity": "medium" }
+    },
+    {
+      "id": "seed_016",
+      "role": "customer",
+      "goal": "leave a review and rating for a purchased product",
+      "benefit": "share my experience with other buyers",
+      "context": { "domain": "ecommerce", "complexity": "low" }
+    },
+    {
+      "id": "seed_017",
+      "role": "store manager",
+      "goal": "update product inventory levels",
+      "benefit": "prevent overselling and stockouts",
+      "context": { "domain": "ecommerce", "complexity": "medium" }
+    },
+    {
+      "id": "seed_018",
+      "role": "international customer",
+      "goal": "view prices in my local currency",
+      "benefit": "understand costs without manual conversion",
+      "context": { "domain": "ecommerce", "complexity": "medium" }
+    },
+    {
+      "id": "seed_019",
+      "role": "content creator",
+      "goal": "upload documents and images to the platform",
+      "benefit": "store and share my files with collaborators",
+      "context": { "domain": "content_management", "complexity": "medium" }
+    },
+    {
+      "id": "seed_020",
+      "role": "editor",
+      "goal": "edit a document collaboratively in real-time",
+      "benefit": "work together with teammates without version conflicts",
+      "context": { "domain": "content_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_021",
+      "role": "team member",
+      "goal": "share a file with specific colleagues",
+      "benefit": "control who has access to sensitive content",
+      "context": { "domain": "content_management", "complexity": "medium" }
+    },
+    {
+      "id": "seed_022",
+      "role": "author",
+      "goal": "view previous versions of my document",
+      "benefit": "revert to earlier drafts if needed",
+      "context": { "domain": "content_management", "complexity": "medium" }
+    },
+    {
+      "id": "seed_023",
+      "role": "researcher",
+      "goal": "search across all my files by content",
+      "benefit": "find information quickly without browsing folders",
+      "context": { "domain": "content_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_024",
+      "role": "organizer",
+      "goal": "tag and categorize my files",
+      "benefit": "keep content organized and easy to filter",
+      "context": { "domain": "content_management", "complexity": "low" }
+    },
+    {
+      "id": "seed_025",
+      "role": "archivist",
+      "goal": "archive old files without deleting them",
+      "benefit": "reduce clutter while preserving historical content",
+      "context": { "domain": "content_management", "complexity": "low" }
+    },
+    {
+      "id": "seed_026",
+      "role": "compliance officer",
+      "goal": "set retention policies on documents",
+      "benefit": "automatically manage document lifecycle for compliance",
+      "context": { "domain": "content_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_027",
+      "role": "subscriber",
+      "goal": "receive email notifications for important updates",
+      "benefit": "stay informed without constantly checking the app",
+      "context": { "domain": "notifications", "complexity": "medium" }
+    },
+    {
+      "id": "seed_028",
+      "role": "mobile user",
+      "goal": "receive push notifications on my phone",
+      "benefit": "get instant alerts for time-sensitive events",
+      "context": { "domain": "notifications", "complexity": "medium" }
+    },
+    {
+      "id": "seed_029",
+      "role": "busy professional",
+      "goal": "customize my notification preferences",
+      "benefit": "only receive alerts that matter to me",
+      "context": { "domain": "notifications", "complexity": "medium" }
+    },
+    {
+      "id": "seed_030",
+      "role": "user",
+      "goal": "view my notification history",
+      "benefit": "catch up on alerts I may have missed",
+      "context": { "domain": "notifications", "complexity": "low" }
+    },
+    {
+      "id": "seed_031",
+      "role": "overwhelmed user",
+      "goal": "receive digest emails instead of individual notifications",
+      "benefit": "reduce inbox clutter while staying informed",
+      "context": { "domain": "notifications", "complexity": "medium" }
+    },
+    {
+      "id": "seed_032",
+      "role": "former subscriber",
+      "goal": "unsubscribe from all marketing emails",
+      "benefit": "stop receiving unwanted communications",
+      "context": { "domain": "notifications", "complexity": "low" }
+    },
+    {
+      "id": "seed_033",
+      "role": "analyst",
+      "goal": "view a dashboard of key metrics",
+      "benefit": "monitor business performance at a glance",
+      "context": { "domain": "analytics", "complexity": "medium" }
+    },
+    {
+      "id": "seed_034",
+      "role": "manager",
+      "goal": "generate a monthly performance report",
+      "benefit": "share insights with stakeholders",
+      "context": { "domain": "analytics", "complexity": "medium" }
+    },
+    {
+      "id": "seed_035",
+      "role": "data analyst",
+      "goal": "export analytics data to CSV",
+      "benefit": "perform custom analysis in external tools",
+      "context": { "domain": "analytics", "complexity": "low" }
+    },
+    {
+      "id": "seed_036",
+      "role": "operations lead",
+      "goal": "view real-time metrics on a live dashboard",
+      "benefit": "respond quickly to emerging issues",
+      "context": { "domain": "analytics", "complexity": "high" }
+    },
+    {
+      "id": "seed_037",
+      "role": "strategist",
+      "goal": "compare metrics across different time periods",
+      "benefit": "identify trends and measure growth",
+      "context": { "domain": "analytics", "complexity": "medium" }
+    },
+    {
+      "id": "seed_038",
+      "role": "executive",
+      "goal": "schedule automated reports to be emailed weekly",
+      "benefit": "receive regular updates without manual effort",
+      "context": { "domain": "analytics", "complexity": "medium" }
+    },
+    {
+      "id": "seed_039",
+      "role": "account holder",
+      "goal": "update my profile information",
+      "benefit": "keep my details current and accurate",
+      "context": { "domain": "user_management", "complexity": "low" }
+    },
+    {
+      "id": "seed_040",
+      "role": "admin",
+      "goal": "assign roles and permissions to users",
+      "benefit": "control access to features based on responsibility",
+      "context": { "domain": "user_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_041",
+      "role": "team lead",
+      "goal": "invite new members to my team",
+      "benefit": "onboard colleagues quickly",
+      "context": { "domain": "user_management", "complexity": "medium" }
+    },
+    {
+      "id": "seed_042",
+      "role": "organization owner",
+      "goal": "manage multiple teams within my organization",
+      "benefit": "organize users by department or project",
+      "context": { "domain": "user_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_043",
+      "role": "departing user",
+      "goal": "delete my account and all associated data",
+      "benefit": "exercise my right to be forgotten",
+      "context": { "domain": "user_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_044",
+      "role": "admin",
+      "goal": "view an audit log of user actions",
+      "benefit": "track changes for security and compliance",
+      "context": { "domain": "user_management", "complexity": "high" }
+    },
+    {
+      "id": "seed_045",
+      "role": "user",
+      "goal": "do something",
+      "benefit": "achieve my goal",
+      "context": { "domain": "edge_case", "complexity": "low", "edge_case": true, "note": "Minimal/vague input" }
+    },
+    {
+      "id": "seed_046",
+      "role": "enterprise administrator responsible for managing a large-scale deployment across multiple geographic regions",
+      "goal": "configure and deploy a comprehensive multi-tenant architecture that supports isolated data storage, custom branding per tenant, role-based access control with hierarchical permissions, and automated provisioning workflows",
+      "benefit": "enable seamless onboarding of new enterprise clients while maintaining strict data isolation, compliance with regional data residency requirements, and operational efficiency at scale",
+      "context": { "domain": "edge_case", "complexity": "high", "edge_case": true, "note": "Very long/complex input" }
+    },
+    {
+      "id": "seed_047",
+      "role": "user with special chars: <script>alert('xss')</script>",
+      "goal": "test input with \"quotes\" and 'apostrophes'",
+      "benefit": "verify that special characters are handled safely",
+      "context": { "domain": "edge_case", "complexity": "low", "edge_case": true, "note": "Special characters" }
+    },
+    {
+      "id": "seed_048",
+      "role": "customer",
+      "goal": "buy a product and also return it simultaneously",
+      "benefit": "test conflicting requirements",
+      "context": { "domain": "edge_case", "complexity": "medium", "edge_case": true, "note": "Conflicting requirements" }
+    },
+    {
+      "id": "seed_049",
+      "role": "",
+      "goal": "perform an action without specifying who I am",
+      "benefit": "handle missing role gracefully",
+      "context": { "domain": "edge_case", "complexity": "low", "edge_case": true, "note": "Empty role" }
+    },
+    {
+      "id": "seed_050",
+      "role": "developer",
+      "goal": "integrate with a third-party API",
+      "benefit": "",
+      "context": { "domain": "edge_case", "complexity": "medium", "edge_case": true, "note": "Empty benefit" }
+    }
+  ]
+}

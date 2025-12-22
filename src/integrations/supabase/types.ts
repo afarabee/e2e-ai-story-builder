@@ -90,6 +90,122 @@ export type Database = {
           },
         ]
       }
+      sb_eval_cases: {
+        Row: {
+          action_id: string | null
+          created_at: string
+          error: string | null
+          eval_results: Json
+          id: string
+          input_data: Json
+          output_story: Json | null
+          passed: boolean
+          run_id: string
+          session_id: string | null
+          story_id: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          created_at?: string
+          error?: string | null
+          eval_results?: Json
+          id?: string
+          input_data: Json
+          output_story?: Json | null
+          passed?: boolean
+          run_id: string
+          session_id?: string | null
+          story_id?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          created_at?: string
+          error?: string | null
+          eval_results?: Json
+          id?: string
+          input_data?: Json
+          output_story?: Json | null
+          passed?: boolean
+          run_id?: string
+          session_id?: string | null
+          story_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sb_eval_cases_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "sb_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sb_eval_cases_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "sb_eval_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sb_eval_cases_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sb_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sb_eval_cases_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "sb_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sb_eval_runs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          dataset_version: string
+          error: string | null
+          failed_cases: number
+          id: string
+          model: string | null
+          passed_cases: number
+          prompt_version: string | null
+          run_name: string | null
+          status: string
+          total_cases: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          dataset_version: string
+          error?: string | null
+          failed_cases?: number
+          id?: string
+          model?: string | null
+          passed_cases?: number
+          prompt_version?: string | null
+          run_name?: string | null
+          status?: string
+          total_cases?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          dataset_version?: string
+          error?: string | null
+          failed_cases?: number
+          id?: string
+          model?: string | null
+          passed_cases?: number
+          prompt_version?: string | null
+          run_name?: string | null
+          status?: string
+          total_cases?: number
+        }
+        Relationships: []
+      }
       sb_sessions: {
         Row: {
           context_defaults: Json | null

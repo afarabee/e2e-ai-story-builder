@@ -1,173 +1,257 @@
-# Eval Tables Schema
+# Eval Tables Schema Reference
 
-Documentation for the headless eval runner tables. These tables are written to by the external Python `early_evals.py` script using the Supabase service role key.
-
-## Tables
-
-### `sb_eval_runs`
-
-One row per batch evaluation run.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | No | `gen_random_uuid()` | Primary key |
-| `created_at` | timestamptz | No | `now()` | When the run started |
-| `run_name` | text | Yes | null | Human-readable name (e.g., "nightly-2024-12-22") |
-| `dataset_version` | text | No | - | Dataset identifier (e.g., "v1.0", "seed_50") |
-| `model` | text | Yes | null | LLM model used (e.g., "gpt-4", "claude-3") |
-| `prompt_version` | text | Yes | null | Prompt template version (e.g., "v2.1") |
-| `total_cases` | int | No | 0 | Total number of cases in run |
-| `passed_cases` | int | No | 0 | Number of cases that passed all evals |
-| `failed_cases` | int | No | 0 | Number of cases that failed any eval |
-| `status` | text | No | `'running'` | Run status: `running`, `completed`, `failed` |
-| `completed_at` | timestamptz | Yes | null | When the run finished |
-| `error` | text | Yes | null | Error message if run failed |
-
-### `sb_eval_cases`
-
-One row per evaluated story within a run.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| `id` | uuid | No | `gen_random_uuid()` | Primary key |
-| `run_id` | uuid | No | - | FK to `sb_eval_runs.id` (cascade delete) |
-| `created_at` | timestamptz | No | `now()` | When the case was evaluated |
-| `input_data` | jsonb | No | - | Seed input used for generation |
-| `output_story` | jsonb | Yes | null | Generated/refined story |
-| `session_id` | uuid | Yes | null | FK to `sb_sessions.id` (optional) |
-| `story_id` | uuid | Yes | null | FK to `sb_stories.id` (optional) |
-| `action_id` | uuid | Yes | null | FK to `sb_actions.id` (optional) |
-| `eval_results` | jsonb | No | `'{}'` | Full eval output from Python |
-| `passed` | boolean | No | false | Overall pass/fail for this case |
-| `error` | text | Yes | null | Error message if case failed to run |
+This document defines the schema for the headless eval runner tables in Supabase.
 
 ---
 
-## JSONB Shapes
+## Table: `sb_eval_runs`
 
-### `input_data` (from `eval_seed_inputs.json`)
+Stores metadata for each batch evaluation run.
 
-```json
+| Column           | Type                     | Required | Default              | Description                                      |
+|------------------|--------------------------|----------|----------------------|--------------------------------------------------|
+| `id`             | `uuid`                   | Yes      | `gen_random_uuid()`  | Primary key                                      |
+| `created_at`     | `timestamptz`            | Yes      | `now()`              | When the run was created                         |
+| `run_name`       | `text`                   | No       | `NULL`               | Human-readable name (e.g., "nightly-2024-12-22") |
+| `dataset_version`| `text`                   | Yes      | —                    | Version of seed inputs (e.g., "v1.0")            |
+| `model`          | `text`                   | No       | `NULL`               | LLM model used (e.g., "gpt-4o")                  |
+| `prompt_version` | `text`                   | No       | `NULL`               | Prompt template version                          |
+| `total_cases`    | `integer`                | Yes      | `0`                  | Total number of cases in the run                 |
+| `passed_cases`   | `integer`                | Yes      | `0`                  | Number of cases that passed                      |
+| `failed_cases`   | `integer`                | Yes      | `0`                  | Number of cases that failed                      |
+| `status`         | `text`                   | Yes      | `'running'`          | Run status: `running`, `completed`, `failed`     |
+| `completed_at`   | `timestamptz`            | No       | `NULL`               | When the run finished                            |
+| `error`          | `text`                   | No       | `NULL`               | Error message if run failed                      |
+
+---
+
+## Table: `sb_eval_cases`
+
+Stores individual evaluated stories within a run.
+
+| Column         | Type                     | Required | Default              | Description                                      |
+|----------------|--------------------------|----------|----------------------|--------------------------------------------------|
+| `id`           | `uuid`                   | Yes      | `gen_random_uuid()`  | Primary key                                      |
+| `run_id`       | `uuid`                   | Yes      | —                    | FK → `sb_eval_runs.id` (CASCADE on delete)       |
+| `created_at`   | `timestamptz`            | Yes      | `now()`              | When the case was created                        |
+| `input_data`   | `jsonb`                  | Yes      | —                    | Seed input used (see shape below)                |
+| `output_story` | `jsonb`                  | No       | `NULL`               | Generated story JSON                             |
+| `session_id`   | `uuid`                   | No       | `NULL`               | FK → `sb_sessions.id` (if session was created)   |
+| `story_id`     | `uuid`                   | No       | `NULL`               | FK → `sb_stories.id` (if story was saved)        |
+| `action_id`    | `uuid`                   | No       | `NULL`               | FK → `sb_actions.id` (if action was logged)      |
+| `eval_results` | `jsonb`                  | Yes      | `'{}'::jsonb`        | Evaluation results (see shape below)             |
+| `passed`       | `boolean`                | Yes      | `false`              | Overall pass/fail for this case                  |
+| `error`        | `text`                   | No       | `NULL`               | Error message if case failed                     |
+
+---
+
+## JSONB Shape: `input_data`
+
+Matches the seed input structure from `eval_seed_inputs.json`:
+
+```jsonc
 {
-  "id": "seed_001",
-  "role": "user",
-  "goal": "log in securely using my email and password",
-  "benefit": "access my personalized dashboard and data",
-  "context": {
-    "domain": "authentication",
-    "complexity": "low" | "medium" | "high",
-    "edge_case": true,
-    "note": "Optional note about this input"
+  "id": "seed_001",                    // Required: unique seed identifier
+  "role": "user",                      // Required: user role
+  "goal": "reset my password",         // Required: what the user wants
+  "benefit": "regain account access",  // Required: why they want it
+  "context": {                         // Required: additional context
+    "domain": "authentication",        // Required: problem domain
+    "complexity": "low",               // Required: low | medium | high
+    "edge_case": true,                 // Optional: is this an edge case?
+    "note": "expired token scenario"   // Optional: additional notes
   }
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Unique identifier for the seed input |
-| `role` | string | Yes | "As a [role]..." portion of user story |
-| `goal` | string | Yes | "I want to [goal]..." portion |
-| `benefit` | string | Yes | "So that [benefit]..." portion |
-| `context.domain` | string | No | Category (e.g., "authentication", "ecommerce") |
-| `context.complexity` | string | No | Expected complexity: "low", "medium", "high" |
-| `context.edge_case` | boolean | No | Whether this is an edge case input |
-| `context.note` | string | No | Additional notes about the input |
+---
 
-### `output_story` (generated story)
+## JSONB Shape: `output_story`
 
-```json
+The generated story structure:
+
+```jsonc
 {
-  "title": "User Login",
-  "description": "As a user, I want to log in securely using my email and password so that I can access my personalized dashboard and data.",
-  "acceptance_criteria": [
-    "User can enter email and password on login form",
-    "System validates credentials against stored records",
-    "User receives error message for invalid credentials",
-    "User is redirected to dashboard on successful login",
-    "Session token is stored securely"
+  "title": "Password Reset",           // Required: story title
+  "description": "As a user...",       // Required: user story description
+  "acceptance_criteria": [             // Required: array of criteria
+    "Given I am on the login page...",
+    "When I click forgot password...",
+    "Then I receive a reset email..."
   ],
-  "metadata": {
-    "generated_at": "2024-12-22T10:30:00Z",
-    "model": "gpt-4",
-    "prompt_version": "v2.1"
+  "metadata": {                        // Optional: additional metadata
+    "priority": "high",
+    "tags": ["auth", "security"]
   }
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | Yes | Short title for the story |
-| `description` | string | Yes | Full user story in "As a... I want... so that..." format |
-| `acceptance_criteria` | string[] | Yes | List of acceptance criteria |
-| `metadata` | object | No | Generation metadata |
+---
 
-### `eval_results` (from Python `early_evals.py`)
+## JSONB Shape: `eval_results`
 
-```json
+Output from Python `early_evals.py` evaluation:
+
+```jsonc
 {
-  "checks": [
-    {
-      "name": "has_title",
-      "passed": true,
-      "message": null
+  "checks": {                          // Required: individual check results
+    "has_title": {                     // Check name
+      "passed": true,                  // Required: did the check pass?
+      "message": "Title is present"    // Optional: explanation
     },
-    {
-      "name": "has_description",
+    "has_description": {
       "passed": true,
-      "message": null
+      "message": "Description follows As a... format"
     },
-    {
-      "name": "description_format",
+    "has_acceptance_criteria": {
+      "passed": true,
+      "message": "3 acceptance criteria found"
+    },
+    "criteria_are_testable": {
       "passed": false,
-      "message": "Missing 'so that' clause"
+      "message": "Criterion 2 is vague: 'works correctly'"
     },
-    {
-      "name": "min_acceptance_criteria",
+    "matches_goal": {
       "passed": true,
-      "message": null
-    },
-    {
-      "name": "max_acceptance_criteria",
-      "passed": true,
-      "message": null
-    },
-    {
-      "name": "no_duplicate_ac",
-      "passed": true,
-      "message": null
-    },
-    {
-      "name": "description_length",
-      "passed": true,
-      "message": null
-    },
-    {
-      "name": "acs_are_actionable",
-      "passed": false,
-      "message": "AC #3 does not start with a verb"
+      "message": "Story addresses password reset goal"
     }
-  ],
-  "summary": {
-    "total": 8,
-    "passed": 6,
-    "failed": 2
+  },
+  "summary": {                         // Required: aggregate results
+    "total_checks": 5,                 // Required: number of checks run
+    "passed_checks": 4,                // Required: number that passed
+    "failed_checks": 1,                // Required: number that failed
+    "pass_rate": 0.8                   // Required: passed / total
   }
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `checks` | array | Yes | List of individual eval check results |
-| `checks[].name` | string | Yes | Check identifier |
-| `checks[].passed` | boolean | Yes | Whether check passed |
-| `checks[].message` | string | No | Failure reason (null if passed) |
-| `summary.total` | int | Yes | Total number of checks run |
-| `summary.passed` | int | Yes | Number of checks passed |
-| `summary.failed` | int | Yes | Number of checks failed |
+---
+
+## Example SQL: Creating a Run
+
+```sql
+INSERT INTO sb_eval_runs (
+  run_name,
+  dataset_version,
+  model,
+  prompt_version,
+  total_cases,
+  status
+) VALUES (
+  'nightly-2024-12-22',
+  'v1.0',
+  'gpt-4o',
+  'v2.1',
+  50,
+  'running'
+)
+RETURNING id;
+```
 
 ---
 
-## Python Writer Example
+## Example SQL: Writing a Case
+
+```sql
+INSERT INTO sb_eval_cases (
+  run_id,
+  input_data,
+  output_story,
+  session_id,
+  story_id,
+  action_id,
+  eval_results,
+  passed
+) VALUES (
+  '123e4567-e89b-12d3-a456-426614174000',  -- run_id from above
+  '{
+    "id": "seed_001",
+    "role": "user",
+    "goal": "reset my password",
+    "benefit": "regain account access",
+    "context": {"domain": "authentication", "complexity": "low"}
+  }'::jsonb,
+  '{
+    "title": "Password Reset",
+    "description": "As a user, I want to reset my password so that I can regain account access",
+    "acceptance_criteria": ["Given...", "When...", "Then..."]
+  }'::jsonb,
+  'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',  -- session_id (optional)
+  'ffffffff-1111-2222-3333-444444444444',  -- story_id (optional)
+  '55555555-6666-7777-8888-999999999999',  -- action_id (optional)
+  '{
+    "checks": {
+      "has_title": {"passed": true},
+      "has_description": {"passed": true},
+      "has_acceptance_criteria": {"passed": true},
+      "criteria_are_testable": {"passed": true},
+      "matches_goal": {"passed": true}
+    },
+    "summary": {"total_checks": 5, "passed_checks": 5, "failed_checks": 0, "pass_rate": 1.0}
+  }'::jsonb,
+  true
+);
+```
+
+---
+
+## Example SQL: Finalizing a Run (Success)
+
+```sql
+UPDATE sb_eval_runs
+SET
+  status = 'completed',
+  passed_cases = 45,
+  failed_cases = 5,
+  completed_at = now()
+WHERE id = '123e4567-e89b-12d3-a456-426614174000';
+```
+
+---
+
+## Example SQL: Finalizing a Run (Failure)
+
+```sql
+UPDATE sb_eval_runs
+SET
+  status = 'failed',
+  error = 'API rate limit exceeded after 23 cases',
+  completed_at = now()
+WHERE id = '123e4567-e89b-12d3-a456-426614174000';
+```
+
+---
+
+## Indexes and Foreign Keys
+
+| Table           | Index/Constraint                | Type        | Notes                                    |
+|-----------------|--------------------------------|-------------|------------------------------------------|
+| `sb_eval_runs`  | `id` (PK)                      | Primary Key | Auto-generated UUID                      |
+| `sb_eval_cases` | `id` (PK)                      | Primary Key | Auto-generated UUID                      |
+| `sb_eval_cases` | `run_id` → `sb_eval_runs.id`   | Foreign Key | `ON DELETE CASCADE` — deleting a run removes all its cases |
+| `sb_eval_cases` | `session_id` → `sb_sessions.id`| Foreign Key | Optional, for traceability               |
+| `sb_eval_cases` | `story_id` → `sb_stories.id`   | Foreign Key | Optional, for traceability               |
+| `sb_eval_cases` | `action_id` → `sb_actions.id`  | Foreign Key | Optional, for traceability               |
+
+**Note:** Consider adding an index on `sb_eval_cases(run_id)` if querying cases by run becomes slow.
+
+---
+
+## Service-Role Access
+
+Both tables use RLS policies that allow all operations when authenticated with the service role:
+
+```sql
+-- Policy on both tables
+CREATE POLICY "Allow all access to sb_eval_*"
+ON public.sb_eval_runs  -- and sb_eval_cases
+FOR ALL
+TO public
+USING (true)
+WITH CHECK (true);
+```
+
+### Python Connection Example
 
 ```python
 from supabase import create_client
@@ -175,56 +259,13 @@ import os
 
 supabase = create_client(
     os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"]  # Required for RLS bypass
 )
-
-# 1. Create a run
-run = supabase.table("sb_eval_runs").insert({
-    "run_name": "nightly-2024-12-22",
-    "dataset_version": "v1.0",
-    "model": "gpt-4",
-    "prompt_version": "v2.1",
-    "status": "running"
-}).execute()
-
-run_id = run.data[0]["id"]
-
-# 2. Insert cases
-for seed_input in dataset["inputs"]:
-    # Generate story...
-    output_story = generate_story(seed_input)
-    
-    # Run evals...
-    eval_results = run_early_evals(output_story)
-    
-    # Insert case
-    supabase.table("sb_eval_cases").insert({
-        "run_id": run_id,
-        "input_data": seed_input,
-        "output_story": output_story,
-        "eval_results": eval_results,
-        "passed": eval_results["summary"]["failed"] == 0
-    }).execute()
-
-# 3. Update run with final stats
-supabase.table("sb_eval_runs").update({
-    "status": "completed",
-    "completed_at": "now()",
-    "total_cases": total,
-    "passed_cases": passed,
-    "failed_cases": failed
-}).eq("id", run_id).execute()
 ```
 
----
+### Required Environment Variables
 
-## Environment Variables
-
-The Python runner needs these environment variables:
-
-| Variable | Description |
-|----------|-------------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (NOT anon key) |
-
-These are available in the Lovable Cloud secrets.
+| Variable                    | Description                              |
+|-----------------------------|------------------------------------------|
+| `SUPABASE_URL`              | Project URL (e.g., `https://xxx.supabase.co`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (bypasses RLS)          |

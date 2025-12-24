@@ -289,26 +289,37 @@ export function StoryBuilder({
       
       onStoryGenerated?.();
       
-      // Realistic generation delay
-      await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-      
-      // Generate using mock service
-      const mockResult = generateMockStory(rawInput, customPrompt);
+      // Call sb-run edge function
+      const { data, error } = await supabase.functions.invoke('sb-run', {
+        body: {
+          raw_input: rawInput,
+          project_settings: { customPrompt },
+          run_mode: 'single',
+          models: ['openai:gpt-5'],
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.runs?.[0]) throw new Error('No story returned from backend');
+
+      const run = data.runs[0];
+      const finalStory = run.final_story;
       
       const generatedStory = {
         ...story,
-        title: mockResult.title,
-        description: mockResult.description,
-        acceptanceCriteria: mockResult.acceptanceCriteria,
-        storyPoints: mockResult.storyPoints,
+        title: finalStory.title,
+        description: finalStory.description,
+        acceptanceCriteria: finalStory.acceptance_criteria || [],
+        storyPoints: 3, // Default for now, backend doesn't return this yet
         status: 'ready' as const
       };
 
+      // Backend doesn't return testData yet, use empty defaults
       const generatedTestData = {
-        userInputs: mockResult.testData.userInputs,
-        edgeCases: mockResult.testData.edgeCases,
-        apiResponses: mockResult.testData.apiResponses,
-        codeSnippets: mockResult.testData.codeSnippets
+        userInputs: [],
+        edgeCases: [],
+        apiResponses: [],
+        codeSnippets: []
       };
 
       setStory(generatedStory);
@@ -328,12 +339,6 @@ export function StoryBuilder({
       
       // Notify parent of story update
       onStoryUpdate?.(generatedStory);
-      
-      // Set dev notes if available
-      if (mockResult.devNotes && mockResult.testData.codeSnippets.length > 0) {
-        setHasDevNotes(true);
-        setDevNotesOpen(true);
-      }
 
       // Auto-save version after generation
       const storyContent = {

@@ -63,9 +63,26 @@ serve(async (req) => {
       models = ["openai:gpt-5"],
     } = body;
 
-    const sessionId = crypto.randomUUID();
     const comparisonGroupId =
       run_mode === "compare" ? crypto.randomUUID() : null;
+
+    // Create session first (required by foreign key constraint)
+    const { data: session, error: sessionError } = await supabase
+      .from("sb_sessions")
+      .insert({
+        title: raw_input?.substring(0, 100) || "New Story",
+        status: "active",
+        context_defaults: project_settings,
+      })
+      .select()
+      .single();
+
+    if (sessionError) {
+      console.error("Session insert error:", sessionError);
+      throw sessionError;
+    }
+
+    const sessionId = session.id;
 
     const runs: RunResult[] = (models as string[]).map((modelId: string) => ({
       run_id: crypto.randomUUID(),

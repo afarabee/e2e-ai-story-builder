@@ -30,6 +30,9 @@ type RunResult = {
 };
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  console.log(`[sb-run] requestId=${requestId}`);
+
   // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

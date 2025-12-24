@@ -1,88 +1,202 @@
-# 📋 AI-Assisted User Story Generator
+# E2E AI Story Builder
 
-[![Built with Lovable](https://img.shields.io/badge/Built_with-Lovable-db2777?style=flat-square&logo=heart)](https://lovable.dev/projects/00b71058-6b2b-4a5c-8dfa-0b146db9a748)
+**End-to-end AI-powered user story generation with Definition-of-Ready enforcement, evaluation (evals), and human-in-the-loop review.**
 
-**AI-Assisted User Story Generator** is an AI-powered tool designed to streamline the creation, refinement, and management of Agile user stories. It helps Product Owners and Developers generate high-quality stories, refine them via an intelligent chat interface, and push finalized Product Backlog Items (PBIs) directly to **Azure DevOps (ADO)**.
+This project demonstrates how to design and ship an AI-assisted product workflow that goes beyond simple text generation by combining:
 
----
-
-## 🚀 Features
-
-### 🧠 Intelligent Story Generation
-* **Progressive Workflow:** Starts with a clean "Raw Input" interface to focus on the core Role/Action/Goal, then expands into a full suite of tools (Details, Chat, Dev Notes) upon generation.
-* **Smart Refinement Chat:** An integrated chatbot that suggests improvements for Titles, Descriptions, and Acceptance Criteria.
-    * **Apply & Undo:** Instantly apply AI suggestions to the active story or undo changes with a single click.
-    * **Context Aware:** The AI is aware of the current story state and strictly adheres to UI capabilities.
-
-### 🔌 Advanced Integrations
-* **Azure DevOps (ADO):** Pushes finalized stories as PBIs with the configured Area Path, selected Iteration Path, selected story points, formatted bullet points for Acceptance Criteria, and auto-tagging (e.g., `chatgpt`).
-* **GitHub RAG Pipeline:** Connects to your repository to "Generate Developer Notes." The system analyzes your codebase to append relevant file paths, code patterns, and implementation steps directly to the story description.
-
-### 🕰️ Version Management
-* **Robust Version History:**
-    * Automatically snapshots changes to Title, Description, or AC (debounced).
-    * **Diff View:** Side-by-side comparison of what changed between versions.
-    * **Restore:** Revert to any previous snapshot safely.
-
-### ⚙️ Project Configuration
-* **Global Settings:** A centralized modal to manage ADO credentials, GitHub repo links, and Prompting behavior.
-* **Knowledge Base:** Supports file uploads (RAG) to give the AI context about your specific project architecture.
+* structured generation,
+* iterative refinement,
+* deterministic gating (DoR),
+* post-generation evaluation (evals), and
+* transparent, reviewable outputs for humans.
 
 ---
 
-## 🛠️ Tech Stack
+## 🎯 What This Project Demonstrates
 
-* **Frontend:** React + TypeScript + Vite
-* **UI Components:** [shadcn-ui](https://ui.shadcn.com/) + Tailwind CSS + Lucide Icons
-* **Prototyping:** Lovable
-* **State Management:** In-memory Session Data with History snapshots
+This repo is intentionally built as a **working demo**, not a toy example.
 
----
+It shows how to:
 
-## 💻 Development Workflow
+* Generate user stories from raw input using LLMs
+* Enforce **Definition of Ready (DoR)** as a hard gate
+* Run **evaluations (evals) after DoR passes** (evals ≠ DoR)
+* Compare outputs across models (OpenAI vs Gemini)
+* Surface quality signals to humans without blocking flow
+* Design AI systems that are observable, auditable, and demoable
 
-This project connects to **Lovable** for UI prototyping and logic generation.
-
-* **Visual Editing:** Visit the [Lovable Project Dashboard](https://lovable.dev/projects/00b71058-6b2b-4a5c-8dfa-0b146db9a748) to make UI changes via prompting. Changes made here are automatically committed to this repository.
-* **Code Editing:** You can clone this repo and edit locally using your preferred IDE (VS Code, etc.). Pushed changes will be reflected back in the Lovable preview.
-
----
-
-## 📖 Usage Guide
-
-### 1. Create a Draft Story
-On load, the app presents a distraction-free **Raw Input** form. Enter the *Feature Name*, *Description*, and the *Role/Action/Goal* trio. Click **Generate User Story** to expand the workspace.
-
-### 2. Refine Story with AI
-Use the **Chat Panel** on the right to request changes (e.g., "Make the acceptance criteria more specific for edge cases").
-* Click **Apply Suggestion** to update the story fields instantly.
-* Use the **Undo** button if the result isn't what you wanted.
-
-### 3. Developer Context
-Click **Generate Developer Notes** to query your linked GitHub repository. The system will append technical implementation details to the story description.
-
-### 4. Push to ADO
-Once finalized, use the **Push to ADO** action. This creates a Work Item in your configured Area Path and assigns the creator based on the active user.
+This project is part of the **AI with Aimee** portfolio and is designed to reflect real-world enterprise AI patterns.
 
 ---
 
-## ⚡ Getting Started
+## 🧠 Core Design Principles
 
-### Prerequisites
-* Node.js v18+
-* npm v9+
+### 1. DoR is not an Eval
 
-### Installation
+* **Definition of Ready (DoR)** is a *gate*
+  → A story must pass DoR before it can move forward.
+* **Evals** are *measurements*
+  → Evals run **after** DoR passes.
+  → Evals may fail without triggering refinement.
+  → Failures surface risk, not automation loops.
 
-```bash
-# 1. Clone the repository
-git clone <YOUR_GIT_URL>
+This separation is intentional and critical for responsible AI systems.
 
-# 2. Enter the directory
-cd <YOUR_PROJECT_NAME>
+---
 
-# 3. Install dependencies
-npm install
+### 2. Human-in-the-Loop by Design
 
-# 4. Start the development server
-npm run dev
+* The system never “silently fixes” quality issues post-DoR.
+* Eval failures surface as:
+
+  * “Needs review” badges
+  * Dimension-level scores
+  * Explicit flags and checklists
+* Humans decide what to do next.
+
+---
+
+### 3. Real Architecture, Not a Monolith
+
+This project uses a **hybrid architecture** to reflect production patterns.
+
+---
+
+## 🏗 Architecture Overview
+
+The Python story-generation pipeline used by this system—including generation, refinement, field-level edits, and Definition-of-Ready enforcement—was authored by the project owner and is intentionally separated into a standalone service to preserve testability, reuse, and governance boundaries.
+
+
+```
+Lovable UI
+   |
+   v
+Supabase Edge Functions (Orchestration)
+   |
+   v
+Python Story Pipeline Service
+   |
+   v
+LLMs (OpenAI / Gemini)
+```
+
+### Responsibilities by Layer
+
+#### Lovable UI
+
+* Story input & configuration
+* Model selection (OpenAI / Gemini / both)
+* Side-by-side comparison views
+* Eval scorecards and review checklists
+
+#### Supabase Edge Functions
+
+* Authentication & session handling
+* Orchestration of story runs
+* Persistence to Supabase tables
+* No LLM logic, no story logic
+
+#### Python Story Pipeline (separate repo)
+
+* Generate → refine → refine-field
+* Definition-of-Ready checks
+* Iterative improvement loops
+* Post-DoR eval execution
+
+> The Python service runs **actual pipeline code**, not reimplemented logic.
+
+---
+
+## 🗄 Data Model (Supabase)
+
+This repo uses a Story Builder–scoped schema (`sb_*`).
+
+Key tables:
+
+* `sb_sessions` – user sessions
+* `sb_stories` – generated stories (one per model/run)
+* `sb_eval_runs` – eval results per story
+* `sb_actions` – pipeline trace/actions
+* `sb_eval_cases` – eval definitions (future use)
+
+This structure enables:
+
+* Side-by-side model comparison
+* Eval dashboards over time
+* Traceability for demos and audits
+
+---
+
+## 🔁 Workflow (Current + Planned)
+
+### Current (in progress)
+
+* Story Generator UI (Lovable)
+* Supabase schema in place
+* Edge Function scaffolding
+* Python pipeline validated independently
+
+### Next (incremental)
+
+1. Wire UI → Edge Function (`sb-run`)
+2. Connect Edge → Python service
+3. Run real LLM calls (OpenAI first, Gemini next)
+4. Store stories + DoR results
+5. Run evals after DoR pass
+6. Surface evals in UI (non-blocking)
+7. Enable side-by-side model comparison
+
+---
+
+## 📊 Evals (High-Level)
+
+Eval dimensions (v1, subject to iteration):
+
+* Clarity & unambiguity
+* Acceptance criteria testability
+* Domain correctness
+* Completeness (edge cases, error paths)
+* Scope appropriateness
+
+Eval strategy:
+
+* Hybrid approach:
+  * Deterministic checks
+  * LLM-as-judge with strict rubric
+* Eval failure ≠ refinement trigger
+* Eval results inform human review
+
+---
+
+## 🔐 Security & Secrets
+
+* No API keys are stored in this repo
+* All secrets live in Supabase project settings
+* LLM calls are executed server-side only
+
+This repo is safe to be **public**.
+
+---
+
+## 📌 Why This Exists
+
+Most AI demos stop at:
+
+> “Look, the model generated text.”
+
+This project goes further:
+
+* It treats AI as a **system**, not a prompt
+* It distinguishes readiness from quality
+* It makes AI outputs reviewable, comparable, and governable
+
+This is the level of rigor required for AI in real product environments.
+
+---
+
+## 🚧 Status
+
+This project is under active development.
+The README will evolve alongside the implementation.
+
+---

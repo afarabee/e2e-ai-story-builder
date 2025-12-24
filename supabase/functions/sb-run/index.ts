@@ -97,15 +97,16 @@ serve(async (req) => {
 
     const storyRows = runs.map((r) => ({
       session_id: sessionId,
-      comparison_group_id: comparisonGroupId,
-      model_id: r.model_id,
-      raw_input,
-      final_story: r.final_story,
-      dor_passed: r.dor.passed,
-      dor_iterations: r.dor.iterations,
-      dor_fail_reasons: r.dor.fail_reasons,
-      created_by: userId, // null allowed in demo mode
-      project_settings,
+      source: "llm",
+      story: {
+        title: r.final_story.title,
+        description: r.final_story.description,
+        acceptance_criteria: r.final_story.acceptance_criteria,
+        model_id: r.model_id,
+        raw_input,
+        dor: r.dor,
+        comparison_group_id: comparisonGroupId,
+      },
     }));
 
     const { data: stories, error: insertError } = await supabase

@@ -40,7 +40,7 @@ import { SettingsModal } from "@/components/settings/SettingsModal";
 import { NewStoryConfirmDialog } from "@/components/ui/new-story-confirm-dialog";
 import { useVersionHistory, StoryVersion } from "@/hooks/useVersionHistory";
 import { useToast } from "@/hooks/use-toast";
-import { generateMockStory } from "@/lib/mockStoryService";
+import { supabase } from "@/integrations/supabase/client";
 import { generateMockChatResponse } from "@/lib/mockChatService";
 
 interface UserStory {

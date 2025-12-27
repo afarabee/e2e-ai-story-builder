@@ -465,6 +465,8 @@ export function StoryBuilder({
       setHighlightedContent(null);
       setRuns([]);
       setActiveModelId(null);
+      setRunMode('single');
+      setSelectedModel('openai:gpt-5');
       
       clearVersions();
       setLastAutoSaveContent('');

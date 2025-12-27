@@ -165,6 +165,8 @@ export function StoryBuilder({
   
   // Compare mode state
   const [runs, setRuns] = useState<RunResponse[]>([]);
+  const [runMode, setRunMode] = useState<'single' | 'compare'>('compare');
+  const [selectedModel, setSelectedModel] = useState<string>('openai:gpt-5');
   const [highlightedContent, setHighlightedContent] = useState<{ field: string, index?: number } | null>(null);
   const [showNewStoryConfirm, setShowNewStoryConfirm] = useState(false);
   
@@ -312,13 +314,17 @@ export function StoryBuilder({
       
       onStoryGenerated?.();
       
-      // Call sb-run edge function with compare mode
+      // Call sb-run edge function with selected mode
+      const models = runMode === 'compare' 
+        ? ['openai:gpt-5', 'google:gemini-2.5-flash'] 
+        : [selectedModel];
+      
       const { data, error } = await supabase.functions.invoke('sb-run', {
         body: {
           raw_input: rawInput,
           project_settings: { customPrompt },
-          run_mode: 'compare',
-          models: ['openai:gpt-5', 'google:gemini-2.5-flash'],
+          run_mode: runMode,
+          models,
         },
       });
 
@@ -941,6 +947,60 @@ export function StoryBuilder({
                 </div>
               </div>
             )}
+
+            {/* Run Mode Toggle */}
+            <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">Mode:</Label>
+                <div className="flex rounded-md border bg-background">
+                  <button
+                    type="button"
+                    onClick={() => setRunMode('single')}
+                    className={cn(
+                      "px-3 py-1.5 text-sm font-medium rounded-l-md transition-colors",
+                      runMode === 'single' 
+                        ? "bg-primary text-primary-foreground" 
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    Single
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRunMode('compare')}
+                    className={cn(
+                      "px-3 py-1.5 text-sm font-medium rounded-r-md transition-colors",
+                      runMode === 'compare' 
+                        ? "bg-primary text-primary-foreground" 
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    Compare
+                  </button>
+                </div>
+              </div>
+
+              {runMode === 'single' && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Model:</Label>
+                  <Select value={selectedModel} onValueChange={setSelectedModel}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai:gpt-5">OpenAI GPT-5</SelectItem>
+                      <SelectItem value="google:gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {runMode === 'compare' && (
+                <span className="text-xs text-muted-foreground">
+                  Comparing: OpenAI GPT-5 vs Gemini 2.5 Flash
+                </span>
+              )}
+            </div>
 
             <Button 
               onClick={generateStory} 

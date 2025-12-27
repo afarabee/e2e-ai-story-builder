@@ -42,6 +42,26 @@ import { useVersionHistory, StoryVersion } from "@/hooks/useVersionHistory";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { generateMockChatResponse } from "@/lib/mockChatService";
+import { ComparePanel } from "./ComparePanel";
+
+// Type for backend run response
+interface RunResponse {
+  run_id: string;
+  model_id: string;
+  story_id: string;
+  final_story: {
+    title: string;
+    description: string;
+    acceptance_criteria: string[];
+  };
+  dor: string[];
+  eval: {
+    overall: number;
+    needs_review: boolean;
+    dimensions: Record<string, number>;
+    flags: string[];
+  };
+}
 
 interface UserStory {
   id: string;
@@ -142,6 +162,9 @@ export function StoryBuilder({
   const [hasDevNotes, setHasDevNotes] = useState(false);
   const [devNotesOpen, setDevNotesOpen] = useState(true);
   const [chatHorizontallyCollapsed, setChatHorizontallyCollapsed] = useState(false);
+  
+  // Compare mode state
+  const [runs, setRuns] = useState<RunResponse[]>([]);
   const [highlightedContent, setHighlightedContent] = useState<{ field: string, index?: number } | null>(null);
   const [showNewStoryConfirm, setShowNewStoryConfirm] = useState(false);
   
@@ -289,19 +312,23 @@ export function StoryBuilder({
       
       onStoryGenerated?.();
       
-      // Call sb-run edge function
+      // Call sb-run edge function with compare mode
       const { data, error } = await supabase.functions.invoke('sb-run', {
         body: {
           raw_input: rawInput,
           project_settings: { customPrompt },
-          run_mode: 'single',
-          models: ['openai:gpt-5'],
+          run_mode: 'compare',
+          models: ['openai:gpt-5', 'google:gemini-2.5-flash'],
         },
       });
 
       if (error) throw error;
-      if (!data?.runs?.[0]) throw new Error('No story returned from backend');
+      if (!data?.runs?.length) throw new Error('No stories returned from backend');
 
+      // Store all runs for compare view
+      setRuns(data.runs);
+
+      // For single-story state (backward compatibility), use first run
       const run = data.runs[0];
       const finalStory = run.final_story;
       
@@ -352,8 +379,8 @@ export function StoryBuilder({
       setLastAutoSaveContent(JSON.stringify(storyContent));
       
       toast({
-        title: "Story Generated",
-        description: "Your user story has been created successfully.",
+        title: "Stories Generated",
+        description: `Generated ${data.runs.length} stories for comparison.`,
       });
     } catch (error) {
       console.error("Error generating story:", error);
@@ -424,6 +451,7 @@ export function StoryBuilder({
       setIsGenerating(false);
       setIsGeneratingDevNotes(false);
       setHighlightedContent(null);
+      setRuns([]);
       
       clearVersions();
       setLastAutoSaveContent('');
@@ -927,12 +955,23 @@ export function StoryBuilder({
         </Card>
       )}
 
-      {/* Only show story sections after generation */}
-      {storyGenerated && (
+      {/* Compare View - Side by Side Panels */}
+      {storyGenerated && runs.length === 2 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Compare Generated Stories</h3>
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+            {runs.map((run) => (
+              <ComparePanel key={run.run_id} run={run} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Single Story View - Only show story sections after generation when single run */}
+      {storyGenerated && runs.length === 1 && (
         <div className="grid gap-6 grid-cols-1">
           {/* Main Story Content */}
           <div className="space-y-6 col-span-1">
-            {/* Story Details */}
             <Card>
             <CardHeader>
               <CardTitle className="text-lg">User Story Details</CardTitle>

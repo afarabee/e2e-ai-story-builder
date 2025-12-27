@@ -60,11 +60,21 @@ serve(async (req) => {
       raw_input,
       project_settings = {},
       run_mode = "single",
-      models = ["openai:gpt-5"],
+      models = [],
     } = body;
+
+    // Default models based on run_mode
+    const effectiveModels: string[] =
+      models.length > 0
+        ? models
+        : run_mode === "compare"
+          ? ["openai:gpt-5", "google:gemini-2.5-flash"]
+          : ["openai:gpt-5"];
 
     const comparisonGroupId =
       run_mode === "compare" ? crypto.randomUUID() : null;
+
+    console.log(`[sb-run] requestId=${requestId} run_mode=${run_mode} models=${effectiveModels.join(",")}`);
 
     // Create session first (required by foreign key constraint)
     const { data: session, error: sessionError } = await supabase
@@ -84,7 +94,7 @@ serve(async (req) => {
 
     const sessionId = session.id;
 
-    const runs: RunResult[] = (models as string[]).map((modelId: string) => ({
+    const runs: RunResult[] = effectiveModels.map((modelId: string) => ({
       run_id: crypto.randomUUID(),
       model_id: modelId,
       final_story: {
@@ -121,8 +131,11 @@ serve(async (req) => {
         acceptance_criteria: r.final_story.acceptance_criteria,
         model_id: r.model_id,
         raw_input,
+        project_settings,
         dor: r.dor,
+        eval: r.eval,
         comparison_group_id: comparisonGroupId,
+        generated_at: new Date().toISOString(),
       },
     }));
 
@@ -132,24 +145,6 @@ serve(async (req) => {
       .select();
 
     if (insertError) throw insertError;
-
-    const evalRows = (stories ?? []).map((story: any, idx: number) => ({
-      story_id: story.id,
-      eval_profile: "v1",
-      overall_score: runs[idx].eval.overall,
-      needs_review: runs[idx].eval.needs_review,
-      dimension_scores: runs[idx].eval.dimensions,
-      flags: runs[idx].eval.flags,
-    }));
-
-    // best-effort insert (don't fail the whole request if eval insert has a schema mismatch)
-    const { error: evalInsertError } = await supabase
-      .from("sb_eval_runs")
-      .insert(evalRows);
-
-    if (evalInsertError) {
-      console.warn("Eval insert warning:", evalInsertError);
-    }
 
     return new Response(
       JSON.stringify({

@@ -167,6 +167,7 @@ export function StoryBuilder({
   const [runs, setRuns] = useState<RunResponse[]>([]);
   const [runMode, setRunMode] = useState<'single' | 'compare'>('compare');
   const [selectedModel, setSelectedModel] = useState<string>('openai:gpt-5');
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [highlightedContent, setHighlightedContent] = useState<{ field: string, index?: number } | null>(null);
   const [showNewStoryConfirm, setShowNewStoryConfirm] = useState(false);
   
@@ -334,6 +335,11 @@ export function StoryBuilder({
       // Store all runs for compare view
       setRuns(data.runs);
 
+      // Set active model for single mode indicator
+      if (runMode === 'single' && data.runs[0]?.model_id) {
+        setActiveModelId(data.runs[0].model_id);
+      }
+
       // For single-story state (backward compatibility), use first run
       const run = data.runs[0];
       const finalStory = run.final_story;
@@ -458,6 +464,7 @@ export function StoryBuilder({
       setIsGeneratingDevNotes(false);
       setHighlightedContent(null);
       setRuns([]);
+      setActiveModelId(null);
       
       clearVersions();
       setLastAutoSaveContent('');
@@ -532,6 +539,7 @@ export function StoryBuilder({
     setOriginalTitle(savedOriginalStory.title);
     setOriginalDescription(savedOriginalStory.description);
     setDirtyCriteria(false);
+    setActiveModelId(null);
     
     // Save a version noting the restart
     saveVersion({
@@ -825,6 +833,15 @@ export function StoryBuilder({
               <StatusIcon status={story.status} />
               {story.status.replace('-', ' ')}
             </Badge>
+            {runMode === 'single' && (
+              <Badge 
+                variant={(activeModelId || selectedModel).includes('openai') ? 'default' : 'secondary'}
+                className="gap-1"
+              >
+                <span className="text-xs font-normal opacity-70">Model:</span>
+                {activeModelId || selectedModel}
+              </Badge>
+            )}
           </div>
           
           <div className="flex items-center gap-2">

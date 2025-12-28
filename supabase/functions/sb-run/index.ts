@@ -63,13 +63,20 @@ serve(async (req) => {
       models = [],
     } = body;
 
-    // Default models based on run_mode
+    // Default models based on run_mode (using cheapest options for testing)
+    const DEFAULT_SINGLE_MODEL = "openai:gpt-5-nano";
+    const DEFAULT_COMPARE_MODELS = ["openai:gpt-5-nano", "google:gemini-2.5-flash-lite"];
+    
+    // Fallback models if primary is unavailable
+    const FALLBACK_OPENAI = "openai:gpt-4o-mini";
+    const FALLBACK_GEMINI = "google:gemini-2.5-flash";
+    
     const effectiveModels: string[] =
       models.length > 0
         ? models
         : run_mode === "compare"
-          ? ["openai:gpt-5", "google:gemini-2.5-flash"]
-          : ["openai:gpt-5"];
+          ? DEFAULT_COMPARE_MODELS
+          : [DEFAULT_SINGLE_MODEL];
 
     const comparisonGroupId =
       run_mode === "compare" ? crypto.randomUUID() : null;
@@ -100,14 +107,36 @@ serve(async (req) => {
       
       // Determine variant_id
       const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : "UNKNOWN";
+      
+      // Check for model availability and apply fallbacks if needed
+      let actualModelId = modelId;
+      let modelFallbackUsed = false;
+      
+      // Simulate model availability check (in real implementation, this would check actual availability)
+      const unavailableModels = new Set<string>(); // Add model IDs here if they become unavailable
+      
+      if (unavailableModels.has(modelId)) {
+        if (isOpenAI) {
+          actualModelId = FALLBACK_OPENAI;
+          modelFallbackUsed = true;
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`);
+        } else if (isGemini) {
+          actualModelId = FALLBACK_GEMINI;
+          modelFallbackUsed = true;
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`);
+        }
+      }
 
       let result: RunResult;
 
       if (isOpenAI) {
         // Variant A: OpenAI - polished, high scores, no review needed
+        const baseFlags: string[] = [];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
         result = {
           run_id: crypto.randomUUID(),
-          model_id: modelId,
+          model_id: actualModelId,
           final_story: {
             title: `User Authentication Flow (${variant_id})`,
             description:
@@ -131,14 +160,17 @@ serve(async (req) => {
               completeness: 5,
               scope: 4,
             },
-            flags: [],
+            flags: baseFlags,
           },
         };
       } else if (isGemini) {
         // Variant B: Gemini - good but needs review, some flags
+        const baseFlags: string[] = ["ambiguous_scope", "missing_edge_cases"];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
         result = {
           run_id: crypto.randomUUID(),
-          model_id: modelId,
+          model_id: actualModelId,
           final_story: {
             title: `Secure Login Experience (${variant_id})`,
             description:
@@ -160,14 +192,17 @@ serve(async (req) => {
               completeness: 3,
               scope: 5,
             },
-            flags: ["ambiguous_scope", "missing_edge_cases"],
+            flags: baseFlags,
           },
         };
       } else {
         // Fallback for unknown models
+        const baseFlags: string[] = ["needs_refinement"];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
         result = {
           run_id: crypto.randomUUID(),
-          model_id: modelId,
+          model_id: actualModelId,
           final_story: {
             title: `Generic User Story (${variant_id})`,
             description:
@@ -188,13 +223,13 @@ serve(async (req) => {
               completeness: 3,
               scope: 4,
             },
-            flags: ["needs_refinement"],
+            flags: baseFlags,
           },
         };
       }
 
       // Log per-run details
-      console.log(`[sb-run] requestId=${requestId} model=${modelId} variant=${variant_id} overall=${result.eval.overall}`);
+      console.log(`[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} fallback=${modelFallbackUsed}`);
 
       return result;
     });

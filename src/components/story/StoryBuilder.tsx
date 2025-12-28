@@ -166,7 +166,7 @@ export function StoryBuilder({
   // Compare mode state
   const [runs, setRuns] = useState<RunResponse[]>([]);
   const [runMode, setRunMode] = useState<'single' | 'compare'>('compare');
-  const [selectedModel, setSelectedModel] = useState<string>('openai:gpt-5');
+  const [selectedModel, setSelectedModel] = useState<string>('openai:gpt-5-nano');
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [highlightedContent, setHighlightedContent] = useState<{ field: string, index?: number } | null>(null);
   const [showNewStoryConfirm, setShowNewStoryConfirm] = useState(false);
@@ -317,7 +317,7 @@ export function StoryBuilder({
       
       // Call sb-run edge function with selected mode
       const models = runMode === 'compare' 
-        ? ['openai:gpt-5', 'google:gemini-2.5-flash'] 
+        ? ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'] 
         : [selectedModel];
       
       const { data, error } = await supabase.functions.invoke('sb-run', {
@@ -466,7 +466,7 @@ export function StoryBuilder({
       setRuns([]);
       setActiveModelId(null);
       setRunMode('single');
-      setSelectedModel('openai:gpt-5');
+      setSelectedModel('openai:gpt-5-nano');
       
       clearVersions();
       setLastAutoSaveContent('');
@@ -1007,8 +1007,8 @@ export function StoryBuilder({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="openai:gpt-5">OpenAI GPT-5</SelectItem>
-                      <SelectItem value="google:gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                      <SelectItem value="openai:gpt-5-nano">OpenAI GPT-5 Nano</SelectItem>
+                      <SelectItem value="google:gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1016,7 +1016,7 @@ export function StoryBuilder({
 
               {runMode === 'compare' && (
                 <span className="text-xs text-muted-foreground">
-                  Comparing: OpenAI GPT-5 vs Gemini 2.5 Flash
+                  Comparing: OpenAI GPT-5 Nano vs Gemini 2.5 Flash Lite
                 </span>
               )}
             </div>

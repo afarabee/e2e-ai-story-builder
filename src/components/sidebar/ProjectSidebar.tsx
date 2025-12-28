@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FolderOpen,
   GitBranch,
@@ -16,11 +17,13 @@ import {
   AlertCircle,
   Eye,
   RotateCcw,
-  GitCompare
+  GitCompare,
+  Sparkles
 } from "lucide-react";
 import { StoryVersion } from "@/hooks/useVersionHistory";
 import { DiffModal } from "@/components/version/DiffModal";
 import { RestoreConfirmDialog } from "@/components/version/RestoreConfirmDialog";
+import { PRESETS } from "@/types/preset";
 
 interface ProjectInfo {
   name: string;
@@ -49,6 +52,9 @@ interface ProjectSidebarProps {
     testData?: any;
   };
   onRestoreVersion?: (version: StoryVersion) => void;
+  selectedPreset?: string;
+  onPresetChange?: (value: string) => void;
+  onApplyPreset?: () => void;
 }
 
 export function ProjectSidebar({ 
@@ -56,7 +62,10 @@ export function ProjectSidebar({
   onRestartStory, 
   versions = [], 
   currentStoryContent,
-  onRestoreVersion 
+  onRestoreVersion,
+  selectedPreset = '',
+  onPresetChange,
+  onApplyPreset
 }: ProjectSidebarProps = {}) {
   const [selectedVersionForDiff, setSelectedVersionForDiff] = useState<StoryVersion | null>(null);
   const [versionToRestore, setVersionToRestore] = useState<StoryVersion | null>(null);
@@ -194,6 +203,44 @@ export function ProjectSidebar({
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Preset Scenarios */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Preset Scenarios
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Select value={selectedPreset} onValueChange={onPresetChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a preset scenario..." />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESETS.map((preset) => (
+                <SelectItem key={preset.id} value={preset.id}>
+                  <span className="flex items-center gap-2">
+                    {preset.name}
+                    {preset.mode === 'compare' && (
+                      <Badge variant="secondary" className="text-xs py-0">Compare</Badge>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="w-full"
+            onClick={onApplyPreset}
+            disabled={!selectedPreset}
+          >
+            Apply Preset
+          </Button>
         </CardContent>
       </Card>
 

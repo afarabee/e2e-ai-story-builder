@@ -25,6 +25,11 @@ const StoryGenerator = () => {
   const newStoryRef = useRef<(() => void) | null>(null);
   const restoreVersionRef = useRef<((version: StoryVersion) => void) | null>(null);
 
+  // Preset state and handlers from StoryBuilder
+  const [selectedPreset, setSelectedPreset] = useState<string>('');
+  const presetChangeRef = useRef<((value: string) => void) | null>(null);
+  const applyPresetRef = useRef<(() => void) | null>(null);
+
   const handleStoryGenerated = () => {
     setStoryGenerated(true);
     setShowChat(true);
@@ -80,6 +85,19 @@ const StoryGenerator = () => {
     }
   };
 
+  const handlePresetChange = (value: string) => {
+    setSelectedPreset(value);
+    if (presetChangeRef.current) {
+      presetChangeRef.current(value);
+    }
+  };
+
+  const handleApplyPreset = () => {
+    if (applyPresetRef.current) {
+      applyPresetRef.current();
+    }
+  };
+
   return (
     <AppLayout
       sidebarContent={
@@ -89,6 +107,9 @@ const StoryGenerator = () => {
           versions={versions}
           currentStoryContent={currentStoryContent}
           onRestoreVersion={handleRestoreVersion}
+          selectedPreset={selectedPreset}
+          onPresetChange={handlePresetChange}
+          onApplyPreset={handleApplyPreset}
         />
       }
       chatContent={
@@ -118,6 +139,11 @@ const StoryGenerator = () => {
         }}
         onSetNewStoryHandler={(newStoryHandler) => {
           newStoryRef.current = newStoryHandler;
+        }}
+        onSetPresetHandlers={(currentPreset, presetChange, applyPreset) => {
+          setSelectedPreset(currentPreset);
+          presetChangeRef.current = presetChange;
+          applyPresetRef.current = applyPreset;
         }}
       />
     </AppLayout>

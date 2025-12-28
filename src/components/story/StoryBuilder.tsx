@@ -90,6 +90,51 @@ interface UploadedFile {
   uploadDate: Date;
 }
 
+// Preset type for story generation scenarios
+interface Preset {
+  id: string;
+  name: string;
+  rawInput: string;
+  customPrompt?: string;
+  mode?: 'single' | 'compare';
+  models?: string[];
+  files?: string[]; // Display only for now
+}
+
+// Seed presets
+const PRESETS: Preset[] = [
+  {
+    id: 'high-complexity',
+    name: 'High Complexity',
+    rawInput: 'As a power user, I need to manage multiple dashboards with real-time data streaming, custom widget layouts, role-based access controls, and audit logging for compliance. The system must support 10k concurrent users with sub-second latency.',
+    customPrompt: 'Focus on scalability, security, and performance requirements. Include detailed acceptance criteria for each feature.',
+  },
+  {
+    id: 'medium-complexity',
+    name: 'Medium Complexity',
+    rawInput: 'As a user, I want to create and manage a personal task list with categories, due dates, and priority levels so I can organize my daily work effectively.',
+    customPrompt: '',
+  },
+  {
+    id: 'low-complexity',
+    name: 'Low Complexity',
+    rawInput: 'As a visitor, I want to see a contact form on the landing page so I can submit inquiries.',
+  },
+  {
+    id: 'medium-strong-prompt',
+    name: 'Medium + Strong Custom Prompt',
+    rawInput: 'As a team lead, I want to assign tasks to team members and track their progress through a kanban board.',
+    customPrompt: 'Write acceptance criteria that are extremely specific and testable. Each criterion should be verifiable in under 5 minutes. Include edge cases for offline mode and conflict resolution when multiple users edit simultaneously.',
+  },
+  {
+    id: 'compare-nano-flash',
+    name: 'Compare Nano vs Flash-Lite',
+    rawInput: 'As a customer, I want to receive email notifications when my order status changes so I stay informed about my delivery.',
+    mode: 'compare',
+    models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
+  },
+];
+
 interface StoryBuilderProps {
   showChat?: boolean;
   onToggleChat?: () => void;
@@ -138,6 +183,7 @@ export function StoryBuilder({
   const [savedOriginalTestData, setSavedOriginalTestData] = useState<TestData | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [showRawInput, setShowRawInput] = useState(true);
+  const [selectedPreset, setSelectedPreset] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [story, setStory] = useState<UserStory>({
@@ -512,6 +558,56 @@ export function StoryBuilder({
 
   const handleCancelNewStory = () => {
     setShowNewStoryConfirm(false);
+  };
+
+  // Apply preset to populate inputs and reset results
+  const applyPreset = () => {
+    const preset = PRESETS.find(p => p.id === selectedPreset);
+    if (!preset) {
+      toast({
+        title: "No Preset Selected",
+        description: "Please select a preset first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Populate inputs
+    setRawInput(preset.rawInput);
+    setCustomPrompt(preset.customPrompt || '');
+
+    // Set mode/models if provided
+    if (preset.mode) {
+      setRunMode(preset.mode);
+    }
+    if (preset.models && preset.models.length > 0) {
+      setSelectedModel(preset.models[0]);
+    }
+
+    // Clear previous results
+    setRuns([]);
+    setActiveModelId(null);
+    setStory(prev => ({
+      ...prev,
+      title: '',
+      description: '',
+      acceptanceCriteria: [],
+      storyPoints: 0,
+      status: 'draft' as const
+    }));
+    setTestData({
+      userInputs: [],
+      edgeCases: [],
+      apiResponses: [],
+      codeSnippets: []
+    });
+    setHasDevNotes(false);
+    setHighlightedContent(null);
+
+    toast({
+      title: "Preset Applied",
+      description: `"${preset.name}" loaded. Click Generate to create the story.`,
+    });
   };
 
   const restartStory = () => {
@@ -966,6 +1062,44 @@ export function StoryBuilder({
                 </div>
               </div>
             )}
+
+            {/* Presets Section */}
+            <div className="p-3 border rounded-lg bg-muted/30">
+              <Label className="text-sm font-medium">Presets</Label>
+              <div className="mt-2 flex gap-2">
+                <Select value={selectedPreset} onValueChange={setSelectedPreset}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select a preset scenario..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRESETS.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.name}
+                        {preset.mode === 'compare' && (
+                          <span className="ml-2 text-xs text-muted-foreground">(Compare)</span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={applyPreset}
+                  disabled={!selectedPreset}
+                >
+                  Apply
+                </Button>
+              </div>
+              {selectedPreset && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {PRESETS.find(p => p.id === selectedPreset)?.files?.length 
+                    ? `Files: ${PRESETS.find(p => p.id === selectedPreset)?.files?.join(', ')}`
+                    : 'No reference files'
+                  }
+                </p>
+              )}
+            </div>
 
             {/* Run Mode Toggle */}
             <div className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30">

@@ -21,13 +21,15 @@ interface AppLayoutProps {
   sidebarContent?: React.ReactNode;
   chatContent?: React.ReactNode;
   showChat?: boolean;
+  chatCollapsed?: boolean;
 }
 
 export default function AppLayout({ 
   children, 
   sidebarContent, 
   chatContent, 
-  showChat = false
+  showChat = false,
+  chatCollapsed = true
 }: AppLayoutProps) {
   const [currentProject] = useState("E-commerce Platform");
   const [connectionStatus] = useState({
@@ -117,14 +119,18 @@ export default function AppLayout({
         {/* Main Content */}
         <main className={cn(
           "flex-1 overflow-auto transition-all duration-300",
-          showChat && "mr-96"
+          showChat && !chatCollapsed && "mr-96",
+          showChat && chatCollapsed && "mr-12"
         )}>
           {children}
         </main>
 
         {/* Chat Panel */}
         {showChat && (
-          <div className="w-96 border-l border-border bg-card fixed right-0 top-16 bottom-0 overflow-auto animate-slide-in-right z-10">
+          <div className={cn(
+            "border-l border-border bg-card fixed right-0 top-16 bottom-0 overflow-auto animate-slide-in-right z-10 transition-all duration-300",
+            chatCollapsed ? "w-12" : "w-96"
+          )}>
             {chatContent}
           </div>
         )}

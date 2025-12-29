@@ -245,8 +245,6 @@ export function ChatPanel({ onApplySuggestion, onUndoSuggestion, isHorizontallyC
           <MessageSquare className="h-5 w-5 mb-1" />
           <span className="text-xs leading-none">Chat</span>
         </Button>
-        {/* Temporary debug indicator - remove once verified */}
-        <span className="text-xs text-red-600 font-mono mt-2 rotate-90 whitespace-nowrap">Collapsed</span>
       </div>
     );
   }
@@ -274,8 +272,6 @@ export function ChatPanel({ onApplySuggestion, onUndoSuggestion, isHorizontallyC
                 <FlaskConical className="h-3 w-3" />
                 Using simulated responses
               </span>
-              {/* Temporary debug indicator - remove once verified */}
-              <span className="text-xs text-green-600 font-mono ml-7">Chat: Open</span>
             </div>
           </div>
         </div>

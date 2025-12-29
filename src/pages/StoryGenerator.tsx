@@ -1,9 +1,13 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { StoryBuilder } from "@/components/story/StoryBuilder";
 import { ProjectSidebar } from "@/components/sidebar/ProjectSidebar";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { StoryVersion } from "@/hooks/useVersionHistory";
+import { PromptVersion } from "@/types/promptVersion";
+import { getPromptVersions } from "@/lib/supabase/promptVersions";
+import { PromptViewModal } from "@/components/prompts/PromptViewModal";
+import { PromptCreateModal } from "@/components/prompts/PromptCreateModal";
 
 const StoryGenerator = () => {
   const [storyGenerated, setStoryGenerated] = useState(false);
@@ -29,6 +33,51 @@ const StoryGenerator = () => {
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const presetChangeRef = useRef<((value: string) => void) | null>(null);
   const applyPresetRef = useRef<(() => void) | null>(null);
+
+  // Prompt version state
+  const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
+  const [selectedPromptVersionId, setSelectedPromptVersionId] = useState<string>('');
+  const [viewPromptModalOpen, setViewPromptModalOpen] = useState(false);
+  const [createPromptModalOpen, setCreatePromptModalOpen] = useState(false);
+
+  // Fetch prompt versions on mount
+  useEffect(() => {
+    fetchPromptVersions();
+  }, []);
+
+  const fetchPromptVersions = async () => {
+    try {
+      const versions = await getPromptVersions();
+      setPromptVersions(versions);
+      // Auto-select active version if none selected
+      if (!selectedPromptVersionId && versions.length > 0) {
+        const activeVersion = versions.find(v => v.status === 'active');
+        if (activeVersion) {
+          setSelectedPromptVersionId(activeVersion.id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch prompt versions:', error);
+    }
+  };
+
+  const handleSelectPromptVersion = (id: string) => {
+    setSelectedPromptVersionId(id);
+  };
+
+  const handleViewPromptVersion = () => {
+    setViewPromptModalOpen(true);
+  };
+
+  const handleCreatePromptVersion = () => {
+    setCreatePromptModalOpen(true);
+  };
+
+  const handlePromptCreated = () => {
+    fetchPromptVersions();
+  };
+
+  const selectedPromptVersion = promptVersions.find(pv => pv.id === selectedPromptVersionId) || null;
 
   const handleStoryGenerated = () => {
     setStoryGenerated(true);
@@ -110,6 +159,11 @@ const StoryGenerator = () => {
           selectedPreset={selectedPreset}
           onPresetChange={handlePresetChange}
           onApplyPreset={handleApplyPreset}
+          promptVersions={promptVersions}
+          selectedPromptVersionId={selectedPromptVersionId}
+          onSelectPromptVersion={handleSelectPromptVersion}
+          onViewPromptVersion={handleViewPromptVersion}
+          onCreatePromptVersion={handleCreatePromptVersion}
         />
       }
       chatContent={
@@ -145,6 +199,18 @@ const StoryGenerator = () => {
           presetChangeRef.current = presetChange;
           applyPresetRef.current = applyPreset;
         }}
+      />
+
+      {/* Prompt Version Modals */}
+      <PromptViewModal
+        isOpen={viewPromptModalOpen}
+        onClose={() => setViewPromptModalOpen(false)}
+        promptVersion={selectedPromptVersion}
+      />
+      <PromptCreateModal
+        isOpen={createPromptModalOpen}
+        onClose={() => setCreatePromptModalOpen(false)}
+        onCreated={handlePromptCreated}
       />
     </AppLayout>
   );

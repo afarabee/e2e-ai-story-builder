@@ -206,6 +206,33 @@ export type Database = {
         }
         Relationships: []
       }
+      sb_prompt_versions: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          template: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          template: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          template?: string
+        }
+        Relationships: []
+      }
       sb_sessions: {
         Row: {
           context_defaults: Json | null

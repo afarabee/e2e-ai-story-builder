@@ -25,6 +25,7 @@ import { StoryVersion } from "@/hooks/useVersionHistory";
 import { DiffModal } from "@/components/version/DiffModal";
 import { RestoreConfirmDialog } from "@/components/version/RestoreConfirmDialog";
 import { PRESETS } from "@/types/preset";
+import { PromptVersion } from "@/types/promptVersion";
 
 interface ProjectInfo {
   name: string;
@@ -56,6 +57,12 @@ interface ProjectSidebarProps {
   selectedPreset?: string;
   onPresetChange?: (value: string) => void;
   onApplyPreset?: () => void;
+  // Prompt version props
+  promptVersions?: PromptVersion[];
+  selectedPromptVersionId?: string;
+  onSelectPromptVersion?: (id: string) => void;
+  onViewPromptVersion?: () => void;
+  onCreatePromptVersion?: () => void;
 }
 
 export function ProjectSidebar({ 
@@ -66,14 +73,16 @@ export function ProjectSidebar({
   onRestoreVersion,
   selectedPreset = '',
   onPresetChange,
-  onApplyPreset
+  onApplyPreset,
+  promptVersions = [],
+  selectedPromptVersionId = '',
+  onSelectPromptVersion,
+  onViewPromptVersion,
+  onCreatePromptVersion,
 }: ProjectSidebarProps = {}) {
   const [selectedVersionForDiff, setSelectedVersionForDiff] = useState<StoryVersion | null>(null);
   const [versionToRestore, setVersionToRestore] = useState<StoryVersion | null>(null);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
-  const [selectedPromptVersion, setSelectedPromptVersion] = useState<string>('');
-  const [showPromptViewModal, setShowPromptViewModal] = useState(false);
-  const [showPromptCreateModal, setShowPromptCreateModal] = useState(false);
   const [projectInfo] = useState<ProjectInfo>({
     name: "E-commerce Platform",
     description: "Next-generation shopping experience with personalized recommendations",
@@ -257,15 +266,24 @@ export function ProjectSidebar({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Select value={selectedPromptVersion} onValueChange={setSelectedPromptVersion}>
+          <Select value={selectedPromptVersionId} onValueChange={onSelectPromptVersion}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select a prompt version" />
             </SelectTrigger>
             <SelectContent>
-              {/* Placeholder items - will be replaced with real data */}
-              <SelectItem value="v1.0">v1.0 - Initial</SelectItem>
-              <SelectItem value="v1.1">v1.1 - Improved AC</SelectItem>
-              <SelectItem value="v2.0">v2.0 - Current</SelectItem>
+              {promptVersions.map((pv) => (
+                <SelectItem key={pv.id} value={pv.id}>
+                  <span className="flex items-center gap-2">
+                    {pv.name}
+                    {pv.status === 'active' && (
+                      <Badge variant="default" className="text-xs py-0">Active</Badge>
+                    )}
+                    {pv.status === 'draft' && (
+                      <Badge variant="secondary" className="text-xs py-0">Draft</Badge>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <div className="flex gap-2">
@@ -273,8 +291,8 @@ export function ProjectSidebar({
               variant="outline" 
               size="sm"
               className="flex-1"
-              onClick={() => setShowPromptViewModal(true)}
-              disabled={!selectedPromptVersion}
+              onClick={onViewPromptVersion}
+              disabled={!selectedPromptVersionId}
             >
               <Eye className="h-4 w-4 mr-1" />
               View
@@ -283,7 +301,7 @@ export function ProjectSidebar({
               variant="outline" 
               size="sm"
               className="flex-1"
-              onClick={() => setShowPromptCreateModal(true)}
+              onClick={onCreatePromptVersion}
             >
               <Plus className="h-4 w-4 mr-1" />
               Create New

@@ -170,7 +170,7 @@ export function StoryBuilder({
   const [isGeneratingDevNotes, setIsGeneratingDevNotes] = useState(false);
   const [hasDevNotes, setHasDevNotes] = useState(false);
   const [devNotesOpen, setDevNotesOpen] = useState(true);
-  const [chatHorizontallyCollapsed, setChatHorizontallyCollapsed] = useState(false);
+  const [chatHorizontallyCollapsed, setChatHorizontallyCollapsed] = useState(true);
   
   // Compare mode state
   const [runs, setRuns] = useState<RunResponse[]>([]);

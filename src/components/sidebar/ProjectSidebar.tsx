@@ -18,7 +18,8 @@ import {
   Eye,
   RotateCcw,
   GitCompare,
-  Sparkles
+  Sparkles,
+  ScrollText
 } from "lucide-react";
 import { StoryVersion } from "@/hooks/useVersionHistory";
 import { DiffModal } from "@/components/version/DiffModal";
@@ -70,6 +71,9 @@ export function ProjectSidebar({
   const [selectedVersionForDiff, setSelectedVersionForDiff] = useState<StoryVersion | null>(null);
   const [versionToRestore, setVersionToRestore] = useState<StoryVersion | null>(null);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [selectedPromptVersion, setSelectedPromptVersion] = useState<string>('');
+  const [showPromptViewModal, setShowPromptViewModal] = useState(false);
+  const [showPromptCreateModal, setShowPromptCreateModal] = useState(false);
   const [projectInfo] = useState<ProjectInfo>({
     name: "E-commerce Platform",
     description: "Next-generation shopping experience with personalized recommendations",
@@ -241,6 +245,50 @@ export function ProjectSidebar({
           >
             Apply Preset
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Prompt Versions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ScrollText className="h-4 w-4" />
+            Prompt Versions
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Select value={selectedPromptVersion} onValueChange={setSelectedPromptVersion}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a prompt version" />
+            </SelectTrigger>
+            <SelectContent>
+              {/* Placeholder items - will be replaced with real data */}
+              <SelectItem value="v1.0">v1.0 - Initial</SelectItem>
+              <SelectItem value="v1.1">v1.1 - Improved AC</SelectItem>
+              <SelectItem value="v2.0">v2.0 - Current</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="flex-1"
+              onClick={() => setShowPromptViewModal(true)}
+              disabled={!selectedPromptVersion}
+            >
+              <Eye className="h-4 w-4 mr-1" />
+              View
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="flex-1"
+              onClick={() => setShowPromptCreateModal(true)}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create New
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

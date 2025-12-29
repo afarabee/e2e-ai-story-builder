@@ -12,6 +12,7 @@ import { PromptCreateModal } from "@/components/prompts/PromptCreateModal";
 const StoryGenerator = () => {
   const [storyGenerated, setStoryGenerated] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(true); // Chat panel collapsed by default
   const [story, setStory] = useState<any>(null);
   const [versions, setVersions] = useState<StoryVersion[]>([]);
   const [currentStoryContent, setCurrentStoryContent] = useState<{
@@ -92,7 +93,12 @@ const StoryGenerator = () => {
     // Then reset parent state
     setStoryGenerated(false);
     setShowChat(false);
+    setChatCollapsed(true); // Reset chat to collapsed on new story
     setStory(null);
+  };
+
+  const handleToggleChatCollapse = () => {
+    setChatCollapsed(prev => !prev);
   };
 
   const handleToggleChat = () => {
@@ -172,9 +178,12 @@ const StoryGenerator = () => {
           currentStory={story}
           onApplySuggestion={handleApplySuggestion}
           onUndoSuggestion={handleUndoSuggestion}
+          isHorizontallyCollapsed={chatCollapsed}
+          onHorizontalToggle={handleToggleChatCollapse}
         />
       }
       showChat={showChat}
+      chatCollapsed={chatCollapsed}
     >
       <StoryBuilder 
         storyGenerated={storyGenerated}

@@ -14,7 +14,7 @@ export interface Preset {
 export const PRESETS: Preset[] = [
   {
     id: 'high-quality',
-    name: 'High Quality – Well-Structured Product Requirements',
+    name: 'High - Customer Login',
     description: 'Clear scope, actors, constraints, and acceptance expectations. Should produce high eval scores and minimal flags.',
     rawInput: `We are building a web-based customer portal for registered users.
 
@@ -49,7 +49,7 @@ Target users:
   },
   {
     id: 'medium-quality',
-    name: 'Medium Quality – Basic Requirements, Missing Detail',
+    name: 'Medium - Customer Login',
     description: 'Adequate but underspecified input. Should pass generation but surface eval gaps.',
     rawInput: `Users need to be able to log into the system and see their dashboard.
 
@@ -64,7 +64,7 @@ Make sure the login works securely and doesn't take too long.`,
   },
   {
     id: 'low-quality',
-    name: 'Low Quality – Vague and Ambiguous',
+    name: 'Low - Customer Login',
     description: 'Minimal context. Should generate a generic story with lower eval scores and review flags.',
     rawInput: `Build a login feature for users.
 
@@ -75,7 +75,7 @@ It should work well and be secure.`,
   },
   {
     id: 'medium-strong-prompt',
-    name: 'Medium Input + Strong Prompt – Structured Output Enforcement',
+    name: 'Medium + Prompt - Customer Login',
     description: 'Demonstrates how a strong custom prompt improves outcomes even with mediocre input.',
     rawInput: `Users need to log in to the app using their credentials.
 
@@ -94,20 +94,8 @@ Requirements:
     models: ['openai:gpt-5-nano'],
   },
   {
-    id: 'compare-nano-flash',
-    name: 'Compare – Nano vs Flash-Lite',
-    description: 'Side-by-side comparison using identical input to demonstrate model differences and eval contrast.',
-    rawInput: `Users must be able to log in using email and password to access protected content.
-
-Invalid login attempts should show an error.
-Sessions should not stay active forever.`,
-    customPrompt: '',
-    mode: 'compare',
-    models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
-  },
-  {
     id: 'high-quality-refund',
-    name: 'High Quality – Refund Request Workflow',
+    name: 'High - Refund Request',
     description: 'Comprehensive e-commerce refund request feature with clear eligibility rules, functional requirements, and scope boundaries.',
     rawInput: `We need a self-service refund request feature in our e-commerce portal.
 
@@ -141,7 +129,7 @@ Out of scope:
   },
   {
     id: 'medium-quality-address',
-    name: 'Medium Quality – Update Shipping Address',
+    name: 'Medium - Shipping Address',
     description: 'Basic address management requirements with some missing details around validation and edge cases.',
     rawInput: `Customers should be able to update their shipping address.
 
@@ -153,7 +141,7 @@ Make sure it validates the address and updates future shipments.`,
   },
   {
     id: 'low-quality-notifications',
-    name: 'Low Quality – Notifications (Too Vague)',
+    name: 'Low - Notifications',
     description: 'Extremely vague notification request with no context, types, or delivery mechanisms specified.',
     rawInput: `Add notifications so users know what's going on.
 
@@ -161,5 +149,66 @@ It should be good and not annoying.`,
     customPrompt: '',
     mode: 'single',
     models: ['openai:gpt-5-nano'],
+  },
+  {
+    id: 'compare-login-high',
+    name: 'Compare - Login (High)',
+    description: 'Side-by-side comparison using high-quality login input to demonstrate model differences.',
+    rawInput: `We are building a web-based customer portal for registered users.
+
+Primary goal:
+Allow users to securely authenticate and access a personalized dashboard.
+
+Context:
+- Users already have accounts created by an admin
+- Authentication is email + password
+- The system must follow basic security best practices
+
+Functional requirements:
+- User can log in using email and password
+- Credentials are validated against securely stored hashes
+- Successful login redirects the user to their dashboard
+- Invalid credentials display a clear, user-friendly error message
+- Session expires automatically after a period of inactivity
+
+Non-functional requirements:
+- Login should complete within 2 seconds under normal conditions
+- Errors must not expose sensitive information
+
+Out of scope:
+- Password reset
+- Multi-factor authentication
+
+Target users:
+- Internal and external customers with existing accounts`,
+    customPrompt: '',
+    mode: 'compare',
+    models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
+  },
+  {
+    id: 'compare-login-medium',
+    name: 'Compare - Login (Medium)',
+    description: 'Side-by-side comparison using medium-quality login input to demonstrate model differences.',
+    rawInput: `Users need to be able to log into the system and see their dashboard.
+
+They should use an email and password to sign in.
+If something goes wrong, the system should show an error.
+Once logged in, they should be able to access protected areas.
+
+Make sure the login works securely and doesn't take too long.`,
+    customPrompt: '',
+    mode: 'compare',
+    models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
+  },
+  {
+    id: 'compare-login-low',
+    name: 'Compare - Login (Low)',
+    description: 'Side-by-side comparison using low-quality login input to demonstrate model differences and eval contrast.',
+    rawInput: `Build a login feature for users.
+
+It should work well and be secure.`,
+    customPrompt: '',
+    mode: 'compare',
+    models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
   },
 ];

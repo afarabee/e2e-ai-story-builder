@@ -43,6 +43,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { generateMockChatResponse } from "@/lib/mockChatService";
 import { ComparePanel } from "./ComparePanel";
+import { RunEvaluationCard } from "./RunEvaluationCard";
 
 // Type for backend run response
 interface RunResponse {
@@ -1256,6 +1257,8 @@ export function StoryBuilder({
               </div>
             </CardContent>
           </Card>
+
+          {runs[0]?.eval && <RunEvaluationCard evalResult={runs[0].eval} />}
 
           {/* Developer Notes - Always Visible */}
           <Collapsible open={devNotesOpen} onOpenChange={setDevNotesOpen}>

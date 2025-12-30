@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, AlertTriangle } from "lucide-react";
+import { EvalScoringHelpModal } from "./EvalScoringHelpModal";
 
 interface EvalResult {
   overall: number;
@@ -75,7 +76,10 @@ export function ComparePanel({ run }: ComparePanelProps) {
         <Card className="bg-muted/50">
           <CardHeader className="pb-2 pt-3">
             <CardTitle className="text-sm flex items-center justify-between">
-              <span>Evaluation</span>
+              <div className="flex items-center gap-2">
+                <span>Evaluation</span>
+                <EvalScoringHelpModal />
+              </div>
               <div className="flex items-center gap-2">
                 {evalResult.needs_review && (
                   <Badge variant="destructive" className="gap-1 text-xs">

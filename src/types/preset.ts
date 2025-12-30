@@ -105,4 +105,61 @@ Sessions should not stay active forever.`,
     mode: 'compare',
     models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
   },
+  {
+    id: 'high-quality-refund',
+    name: 'High Quality – Refund Request Workflow',
+    description: 'Comprehensive e-commerce refund request feature with clear eligibility rules, functional requirements, and scope boundaries.',
+    rawInput: `We need a self-service refund request feature in our e-commerce portal.
+
+Goal:
+Allow a logged-in customer to request a refund for an order item within the allowed policy window.
+
+Context:
+- Orders may contain multiple items
+- Refund eligibility depends on:
+  - item status (delivered)
+  - time since delivery (<= 30 days)
+  - item category exclusions (final sale items are not eligible)
+
+Functional requirements:
+- Customer can open an order and choose an item to request a refund
+- System checks eligibility rules and shows eligibility outcome before submission
+- Customer must provide a reason (dropdown) and optional comments
+- On submit, system creates a refund request record and shows confirmation with a tracking ID
+- Customer can view refund request status (Submitted, Under Review, Approved, Denied, Completed)
+
+Non-functional requirements:
+- Confirmation should be shown immediately after submission
+- Do not expose internal fraud/risk logic to the user
+
+Out of scope:
+- Automated approval decisions
+- Chargebacks`,
+    customPrompt: '',
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
+  {
+    id: 'medium-quality-address',
+    name: 'Medium Quality – Update Shipping Address',
+    description: 'Basic address management requirements with some missing details around validation and edge cases.',
+    rawInput: `Customers should be able to update their shipping address.
+
+They should be able to add a new address and pick a default.
+Make sure it validates the address and updates future shipments.`,
+    customPrompt: '',
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
+  {
+    id: 'low-quality-notifications',
+    name: 'Low Quality – Notifications (Too Vague)',
+    description: 'Extremely vague notification request with no context, types, or delivery mechanisms specified.',
+    rawInput: `Add notifications so users know what's going on.
+
+It should be good and not annoying.`,
+    customPrompt: '',
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
 ];

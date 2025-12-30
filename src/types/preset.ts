@@ -12,6 +12,7 @@ export interface Preset {
 
 // Seed presets for login/authentication eval scenarios
 export const PRESETS: Preset[] = [
+  // === HIGH QUALITY PRESETS ===
   {
     id: 'high-quality',
     name: 'High - Customer Login',
@@ -44,52 +45,6 @@ Out of scope:
 Target users:
 - Internal and external customers with existing accounts`,
     customPrompt: '',
-    mode: 'single',
-    models: ['openai:gpt-5-nano'],
-  },
-  {
-    id: 'medium-quality',
-    name: 'Medium - Customer Login',
-    description: 'Adequate but underspecified input. Should pass generation but surface eval gaps.',
-    rawInput: `Users need to be able to log into the system and see their dashboard.
-
-They should use an email and password to sign in.
-If something goes wrong, the system should show an error.
-Once logged in, they should be able to access protected areas.
-
-Make sure the login works securely and doesn't take too long.`,
-    customPrompt: '',
-    mode: 'single',
-    models: ['openai:gpt-5-nano'],
-  },
-  {
-    id: 'low-quality',
-    name: 'Low - Customer Login',
-    description: 'Minimal context. Should generate a generic story with lower eval scores and review flags.',
-    rawInput: `Build a login feature for users.
-
-It should work well and be secure.`,
-    customPrompt: '',
-    mode: 'single',
-    models: ['openai:gpt-5-nano'],
-  },
-  {
-    id: 'medium-strong-prompt',
-    name: 'Medium + Prompt - Customer Login',
-    description: 'Demonstrates how a strong custom prompt improves outcomes even with mediocre input.',
-    rawInput: `Users need to log in to the app using their credentials.
-
-They should see an error if login fails and access the app if it succeeds.`,
-    customPrompt: `Write the user story in clear agile format.
-
-Requirements:
-- Use "As a / I want / So that" format
-- Generate 5–7 acceptance criteria
-- Include at least:
-  - one negative scenario
-  - one performance-related criterion
-- Avoid vague language like "should work" or "properly"
-- Make acceptance criteria objectively testable`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -127,6 +82,23 @@ Out of scope:
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
+
+  // === MEDIUM QUALITY PRESETS ===
+  {
+    id: 'medium-quality',
+    name: 'Medium - Customer Login',
+    description: 'Adequate but underspecified input. Should pass generation but surface eval gaps.',
+    rawInput: `Users need to be able to log into the system and see their dashboard.
+
+They should use an email and password to sign in.
+If something goes wrong, the system should show an error.
+Once logged in, they should be able to access protected areas.
+
+Make sure the login works securely and doesn't take too long.`,
+    customPrompt: '',
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
   {
     id: 'medium-quality-address',
     name: 'Medium - Shipping Address',
@@ -135,6 +107,39 @@ Out of scope:
 
 They should be able to add a new address and pick a default.
 Make sure it validates the address and updates future shipments.`,
+    customPrompt: '',
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
+  {
+    id: 'medium-strong-prompt',
+    name: 'Medium + Prompt - Customer Login',
+    description: 'Demonstrates how a strong custom prompt improves outcomes even with mediocre input.',
+    rawInput: `Users need to log in to the app using their credentials.
+
+They should see an error if login fails and access the app if it succeeds.`,
+    customPrompt: `Write the user story in clear agile format.
+
+Requirements:
+- Use "As a / I want / So that" format
+- Generate 5–7 acceptance criteria
+- Include at least:
+  - one negative scenario
+  - one performance-related criterion
+- Avoid vague language like "should work" or "properly"
+- Make acceptance criteria objectively testable`,
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
+
+  // === LOW QUALITY PRESETS ===
+  {
+    id: 'low-quality',
+    name: 'Low - Customer Login',
+    description: 'Minimal context. Should generate a generic story with lower eval scores and review flags.',
+    rawInput: `Build a login feature for users.
+
+It should work well and be secure.`,
     customPrompt: '',
     mode: 'single',
     models: ['openai:gpt-5-nano'],
@@ -150,6 +155,8 @@ It should be good and not annoying.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
+
+  // === COMPARE PRESETS ===
   {
     id: 'compare_login_high',
     name: 'Compare - Login (High)',

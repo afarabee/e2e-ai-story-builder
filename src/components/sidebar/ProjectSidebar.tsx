@@ -229,16 +229,31 @@ export function ProjectSidebar({
         </CardHeader>
         <CardContent className="space-y-3">
           <Select value={selectedPreset} onValueChange={onPresetChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a preset scenario..." />
-            </SelectTrigger>
-            <SelectContent>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SelectTrigger className="w-full">
+                    <span className="truncate block max-w-[180px] text-left">
+                      {selectedPreset 
+                        ? PRESETS.find(p => p.id === selectedPreset)?.name || 'Select a preset scenario...'
+                        : 'Select a preset scenario...'}
+                    </span>
+                  </SelectTrigger>
+                </TooltipTrigger>
+                {selectedPreset && (
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p>{PRESETS.find(p => p.id === selectedPreset)?.name}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+            <SelectContent className="max-w-[280px]">
               {PRESETS.map((preset) => (
-                <SelectItem key={preset.id} value={preset.id}>
-                  <span className="flex items-center gap-2">
-                    {preset.name}
+                <SelectItem key={preset.id} value={preset.id} title={preset.name}>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="truncate">{preset.name}</span>
                     {preset.mode === 'compare' && (
-                      <Badge variant="secondary" className="text-xs py-0">Compare</Badge>
+                      <Badge variant="secondary" className="text-xs py-0 flex-shrink-0">Compare</Badge>
                     )}
                   </span>
                 </SelectItem>

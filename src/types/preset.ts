@@ -151,62 +151,38 @@ It should be good and not annoying.`,
     models: ['openai:gpt-5-nano'],
   },
   {
-    id: 'compare-login-high',
+    id: 'compare_login_high',
     name: 'Compare - Login (High)',
     description: 'Side-by-side comparison using high-quality login input to demonstrate model differences.',
-    rawInput: `We are building a web-based customer portal for registered users.
+    rawInput: `Implement a secure customer login experience for a web application.
 
-Primary goal:
-Allow users to securely authenticate and access a personalized dashboard.
+Users must authenticate using email and password.
 
-Context:
-- Users already have accounts created by an admin
-- Authentication is email + password
-- The system must follow basic security best practices
+The system should validate credentials, handle errors clearly, and protect user accounts from misuse.
 
-Functional requirements:
-- User can log in using email and password
-- Credentials are validated against securely stored hashes
-- Successful login redirects the user to their dashboard
-- Invalid credentials display a clear, user-friendly error message
-- Session expires automatically after a period of inactivity
-
-Non-functional requirements:
-- Login should complete within 2 seconds under normal conditions
-- Errors must not expose sensitive information
-
-Out of scope:
-- Password reset
-- Multi-factor authentication
-
-Target users:
-- Internal and external customers with existing accounts`,
+Include clear success and failure states.`,
     customPrompt: '',
     mode: 'compare',
     models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
   },
   {
-    id: 'compare-login-medium',
+    id: 'compare_login_medium',
     name: 'Compare - Login (Medium)',
     description: 'Side-by-side comparison using medium-quality login input to demonstrate model differences.',
-    rawInput: `Users need to be able to log into the system and see their dashboard.
+    rawInput: `We need login functionality for users.
 
-They should use an email and password to sign in.
-If something goes wrong, the system should show an error.
-Once logged in, they should be able to access protected areas.
+They should be able to sign in and get access to their account.
 
-Make sure the login works securely and doesn't take too long.`,
+Make sure errors are handled.`,
     customPrompt: '',
     mode: 'compare',
     models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],
   },
   {
-    id: 'compare-login-low',
+    id: 'compare_login_low',
     name: 'Compare - Login (Low)',
     description: 'Side-by-side comparison using low-quality login input to demonstrate model differences and eval contrast.',
-    rawInput: `Build a login feature for users.
-
-It should work well and be secure.`,
+    rawInput: `Users need to log in.`,
     customPrompt: '',
     mode: 'compare',
     models: ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'],

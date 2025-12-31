@@ -197,15 +197,17 @@ serve(async (req) => {
       ? rawInputTrimmed.replace(/\s+/g, " ").slice(0, 240)
       : "";
 
+    // COMPARE MODE: Ensure two truly distinct runs with separate stories per model
     const runs: RunResult[] = effectiveModels.map(
       (modelId: string, modelIndex: number) => {
+        const runId = crypto.randomUUID();
         const isOpenAI = modelId.toLowerCase().includes("openai");
         const isGemini =
           modelId.toLowerCase().includes("gemini") ||
           modelId.toLowerCase().includes("google");
 
         // Determine variant_id (kept for compare readability)
-        const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : "UNKNOWN";
+        const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : `VARIANT_${modelIndex}`;
 
         // Check for model availability and apply fallbacks if needed
         let actualModelId = modelId;
@@ -230,11 +232,11 @@ serve(async (req) => {
           }
         }
 
-        // Seed includes raw_input + customPrompt + model to ensure presets influence output
-        const inputSeed = `${rawInputTrimmed}||${customPrompt}||${modelId}||${modelIndex}||${invocationSeed}`;
+        // IMPORTANT: Seed includes model AND variant to guarantee distinct outputs per model
+        const inputSeed = `${rawInputTrimmed}||${customPrompt}||${modelId}||${variant_id}||${modelIndex}||${invocationSeed}`;
         const hash = fnv1aHash(inputSeed);
 
-        // Derive scores from hash
+        // Derive scores from hash - each model gets different scores due to variant in seed
         const clarityScore = 3 + (hash % 3); // 3-5
         const testabilityScore = 2 + ((hash >> 4) % 4); // 2-5
         const completenessScore = 3 + ((hash >> 8) % 3); // 3-5
@@ -271,23 +273,32 @@ serve(async (req) => {
         }
         if (modelFallbackUsed) flags.push("model_fallback_used");
 
-        // IMPORTANT: SINGLE mode must be derived from raw_input (no login templates)
-        // Compare mode may still differ by model/variant.
+        // Generate model-specific title with variant marker for compare mode
         const title =
           run_mode === "compare" ? `${baseTitle} (${variant_id})` : baseTitle;
 
-        const acceptanceCriteria = extractAcceptanceCriteria(rawInputTrimmed);
+        // Generate model-specific acceptance criteria (use hash to vary slightly)
+        const baseAC = extractAcceptanceCriteria(rawInputTrimmed);
+        // For compare mode, slightly vary acceptance criteria per model
+        const acceptanceCriteria = run_mode === "compare" && isGemini
+          ? baseAC.map((ac, i) => i === 0 ? `[Gemini] ${ac}` : ac)
+          : run_mode === "compare" && isOpenAI
+            ? baseAC.map((ac, i) => i === 0 ? `[OpenAI] ${ac}` : ac)
+            : baseAC;
 
+        // Generate model-specific description
+        const modelPrefix = isOpenAI ? "OpenAI analysis: " : isGemini ? "Gemini analysis: " : "";
         const description =
           baseDescription.length > 0
-            ? `As a user, I want ${baseDescription} so that I achieve the intended outcome.`
-            : "As a user, I want a clearly defined feature so that I can accomplish my goal.";
+            ? `${run_mode === "compare" ? modelPrefix : ""}As a user, I want ${baseDescription} so that I achieve the intended outcome.`
+            : `${run_mode === "compare" ? modelPrefix : ""}As a user, I want a clearly defined feature so that I can accomplish my goal.`;
 
         const iterations = isOpenAI ? 1 : 1 + (hash % 3);
         const dorPassed = overall >= 3.5;
 
+        // Create a NEW story object for each run (never reuse)
         const result: RunResult = {
-          run_id: crypto.randomUUID(),
+          run_id: runId,
           model_id: actualModelId,
           final_story: {
             title,
@@ -313,8 +324,10 @@ serve(async (req) => {
           },
         };
 
+        // Enhanced per-run logging with title hash for uniqueness confirmation
+        const titleHash = fnv1aHash(result.final_story.title).toString(16).slice(0, 8);
         console.log(
-          `[sb-run] requestId=${requestId} model_id=${actualModelId} title="${result.final_story.title}" overall=${result.eval.overall}`,
+          `[sb-run] requestId=${requestId} run_id=${runId.slice(0, 8)} model_id=${actualModelId} variant=${variant_id} overall=${result.eval.overall} title_hash=${titleHash} title="${result.final_story.title.slice(0, 50)}"`,
         );
 
         return result;

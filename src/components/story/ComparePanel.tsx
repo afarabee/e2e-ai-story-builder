@@ -1,5 +1,6 @@
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Edit } from "lucide-react";
 import { RunEvaluationCard } from "./RunEvaluationCard";
 
 interface EvalResult {
@@ -30,9 +31,10 @@ interface Run {
 
 interface ComparePanelProps {
   run: Run;
+  onEditVersion?: (run: Run) => void;
 }
 
-export function ComparePanel({ run }: ComparePanelProps) {
+export function ComparePanel({ run, onEditVersion }: ComparePanelProps) {
   const { model_id, story_id, final_story, eval: evalResult } = run;
 
   return (
@@ -76,6 +78,17 @@ export function ComparePanel({ run }: ComparePanelProps) {
         </div>
 
         <RunEvaluationCard evalResult={evalResult} />
+
+        {/* Edit this version button */}
+        {onEditVersion && (
+          <Button 
+            onClick={() => onEditVersion(run)}
+            className="w-full gap-2"
+          >
+            <Edit className="h-4 w-4" />
+            Edit this version
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

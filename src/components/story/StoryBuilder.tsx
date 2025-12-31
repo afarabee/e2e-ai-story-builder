@@ -55,7 +55,11 @@ interface RunResponse {
     description: string;
     acceptance_criteria: string[];
   };
-  dor: string[];
+  dor: {
+    passed: boolean;
+    iterations: number;
+    fail_reasons: string[];
+  };
   eval: {
     overall: number;
     needs_review: boolean;
@@ -328,28 +332,31 @@ export function StoryBuilder({
       setShowRawInput(false);
       setSavedInput(rawInput);
       setSavedCustomPrompt(customPrompt);
-      
+
       // CRITICAL: Reset all previous run state before new generation
       setRuns([]);
       setActiveModelId(null);
-      setStory(prev => ({
+      setHighlightedContent(null);
+      setHasDevNotes(false);
+      setDirtyCriteria(false);
+      setOriginalTitle("");
+      setOriginalDescription("");
+
+      setStory((prev) => ({
         ...prev,
-        title: '',
-        description: '',
+        title: "",
+        description: "",
         acceptanceCriteria: [],
         storyPoints: 0,
-        status: 'draft' as const
+        status: "draft" as const,
       }));
       setTestData({
         userInputs: [],
         edgeCases: [],
         apiResponses: [],
-        codeSnippets: []
+        codeSnippets: [],
       });
-      setHasDevNotes(false);
-      setHighlightedContent(null);
-      setDirtyCriteria(false);
-      
+
       onStoryGenerated?.();
       
       // Call sb-run edge function with selected mode
@@ -578,22 +585,26 @@ export function StoryBuilder({
     // Clear previous results
     setRuns([]);
     setActiveModelId(null);
-    setStory(prev => ({
+    setHighlightedContent(null);
+    setHasDevNotes(false);
+    setDirtyCriteria(false);
+    setOriginalTitle("");
+    setOriginalDescription("");
+
+    setStory((prev) => ({
       ...prev,
-      title: '',
-      description: '',
+      title: "",
+      description: "",
       acceptanceCriteria: [],
       storyPoints: 0,
-      status: 'draft' as const
+      status: "draft" as const,
     }));
     setTestData({
       userInputs: [],
       edgeCases: [],
       apiResponses: [],
-      codeSnippets: []
+      codeSnippets: [],
     });
-    setHasDevNotes(false);
-    setHighlightedContent(null);
 
     toast({
       title: "Preset Applied",

@@ -63,14 +63,22 @@ serve(async (req) => {
       models = [],
     } = body;
 
+    const customPrompt: string =
+      typeof project_settings?.customPrompt === "string"
+        ? project_settings.customPrompt
+        : "";
+
     // Default models based on run_mode (using cheapest options for testing)
     const DEFAULT_SINGLE_MODEL = "openai:gpt-5-nano";
-    const DEFAULT_COMPARE_MODELS = ["openai:gpt-5-nano", "google:gemini-2.5-flash-lite"];
-    
+    const DEFAULT_COMPARE_MODELS = [
+      "openai:gpt-5-nano",
+      "google:gemini-2.5-flash-lite",
+    ];
+
     // Fallback models if primary is unavailable
     const FALLBACK_OPENAI = "openai:gpt-4o-mini";
     const FALLBACK_GEMINI = "google:gemini-2.5-flash";
-    
+
     const effectiveModels: string[] =
       models.length > 0
         ? models
@@ -78,16 +86,32 @@ serve(async (req) => {
           ? DEFAULT_COMPARE_MODELS
           : [DEFAULT_SINGLE_MODEL];
 
-    const comparisonGroupId =
-      run_mode === "compare" ? crypto.randomUUID() : null;
+    const comparisonGroupId = run_mode === "compare" ? crypto.randomUUID() : null;
 
-    console.log(`[sb-run] requestId=${requestId} run_mode=${run_mode} models=${effectiveModels.join(",")}`);
+    // FNV-1a hash for deterministic variation based on input
+    const fnv1aHash = (str: string): number => {
+      let hash = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i);
+        hash = (hash * 16777619) >>> 0;
+      }
+      return hash;
+    };
+
+    const rawInputStr = typeof raw_input === "string" ? raw_input : "";
+    const rawInputTrimmed = rawInputStr.trim();
+    const rawPreview = rawInputTrimmed.slice(0, 120);
+    const rawFingerprint = fnv1aHash(rawInputTrimmed || "(empty)").toString(16);
+
+    console.log(
+      `[sb-run] requestId=${requestId} run_mode=${run_mode} models=${effectiveModels.join(",")} raw_len=${rawInputTrimmed.length} raw_fp=${rawFingerprint} raw_preview="${rawPreview.replace(/\n/g, " ")}"`,
+    );
 
     // Create session first (required by foreign key constraint)
     const { data: session, error: sessionError } = await supabase
       .from("sb_sessions")
       .insert({
-        title: raw_input?.substring(0, 100) || "New Story",
+        title: rawInputTrimmed?.substring(0, 100) || "New Story",
         status: "active",
         context_defaults: project_settings,
       })
@@ -101,169 +125,201 @@ serve(async (req) => {
 
     const sessionId = session.id;
 
-    // FNV-1a hash for deterministic variation based on input
-    const fnv1aHash = (str: string): number => {
-      let hash = 2166136261;
-      for (let i = 0; i < str.length; i++) {
-        hash ^= str.charCodeAt(i);
-        hash = (hash * 16777619) >>> 0;
-      }
-      return hash;
-    };
-
-    // Generate unique run_id per invocation to prevent caching issues
+    // Unique seed per request to ensure each invocation is fresh
     const invocationSeed = `${requestId}-${Date.now()}`;
 
-    const runs: RunResult[] = effectiveModels.map((modelId: string, modelIndex: number) => {
-      const isOpenAI = modelId.toLowerCase().includes("openai");
-      const isGemini = modelId.toLowerCase().includes("gemini") || modelId.toLowerCase().includes("google");
-      
-      // Determine variant_id
-      const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : "UNKNOWN";
-      
-      // Check for model availability and apply fallbacks if needed
-      let actualModelId = modelId;
-      let modelFallbackUsed = false;
-      
-      // Simulate model availability check (in real implementation, this would check actual availability)
-      const unavailableModels = new Set<string>(); // Add model IDs here if they become unavailable
-      
-      if (unavailableModels.has(modelId)) {
-        if (isOpenAI) {
-          actualModelId = FALLBACK_OPENAI;
-          modelFallbackUsed = true;
-          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`);
-        } else if (isGemini) {
-          actualModelId = FALLBACK_GEMINI;
-          modelFallbackUsed = true;
-          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`);
+    const toTitleCase = (s: string) =>
+      s
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
+    const extractTitleFromInput = (input: string): string => {
+      const firstLine =
+        input
+          .split("\n")
+          .map((l) => l.trim())
+          .find((l) => l.length > 0) ?? "";
+
+      const cleaned = firstLine
+        .replace(/^[#*\-\d.\s]+/, "")
+        .replace(/[^a-zA-Z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const words = cleaned.split(" ").filter(Boolean);
+      if (words.length >= 3) return toTitleCase(words.slice(0, 7).join(" "));
+
+      // Fallback: use a short topic phrase derived from the body
+      const bodyWords = input
+        .replace(/[^a-zA-Z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .filter(Boolean);
+      if (bodyWords.length >= 3) return toTitleCase(bodyWords.slice(0, 7).join(" "));
+      return "User Story";
+    };
+
+    const extractAcceptanceCriteria = (input: string): string[] => {
+      // Prefer explicit bullet points, if present
+      const bullets = input
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => /^[-*]\s+/.test(l) || /^\d+\)\s+/.test(l) || /^\d+\.\s+/.test(l))
+        .map((l) => l.replace(/^([-*]|\d+\)|\d+\.)\s+/, "").trim())
+        .filter((l) => l.length > 0)
+        .slice(0, 7);
+
+      if (bullets.length >= 3) return bullets;
+
+      // Otherwise: derive generic-but-non-templated ACs tied to input fingerprint
+      const fp = fnv1aHash(input || "(empty)");
+      const base: string[] = [
+        "Story includes clear user goal and success outcome",
+        "Acceptance criteria are testable and unambiguous",
+        "Error cases and validation behavior are specified",
+        "Performance or latency expectations are stated when relevant",
+        "Sensitive data is handled securely and not exposed in errors",
+        "Out-of-scope items are explicitly noted",
+      ];
+
+      const rotated = base
+        .slice(fp % base.length)
+        .concat(base.slice(0, fp % base.length));
+
+      return rotated.slice(0, 5);
+    };
+
+    const baseTitle = extractTitleFromInput(rawInputTrimmed);
+    const baseDescription = rawInputTrimmed
+      ? rawInputTrimmed.replace(/\s+/g, " ").slice(0, 240)
+      : "";
+
+    const runs: RunResult[] = effectiveModels.map(
+      (modelId: string, modelIndex: number) => {
+        const isOpenAI = modelId.toLowerCase().includes("openai");
+        const isGemini =
+          modelId.toLowerCase().includes("gemini") ||
+          modelId.toLowerCase().includes("google");
+
+        // Determine variant_id (kept for compare readability)
+        const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : "UNKNOWN";
+
+        // Check for model availability and apply fallbacks if needed
+        let actualModelId = modelId;
+        let modelFallbackUsed = false;
+
+        // Simulate model availability check (in real implementation, this would check actual availability)
+        const unavailableModels = new Set<string>();
+
+        if (unavailableModels.has(modelId)) {
+          if (isOpenAI) {
+            actualModelId = FALLBACK_OPENAI;
+            modelFallbackUsed = true;
+            console.log(
+              `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`,
+            );
+          } else if (isGemini) {
+            actualModelId = FALLBACK_GEMINI;
+            modelFallbackUsed = true;
+            console.log(
+              `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`,
+            );
+          }
         }
-      }
 
-      // Create unique seed per model+input combination for deterministic but varied output
-      const inputSeed = `${raw_input || ''}-${modelId}-${modelIndex}-${invocationSeed}`;
-      const hash = fnv1aHash(inputSeed);
-      
-      // Derive scores from hash (ensures different inputs = different scores)
-      const clarityScore = 3 + (hash % 3); // 3-5
-      const testabilityScore = 2 + ((hash >> 4) % 4); // 2-5
-      const completenessScore = 3 + ((hash >> 8) % 3); // 3-5
-      const scopeScore = 3 + ((hash >> 12) % 3); // 3-5
-      const consistencyScore = 3 + ((hash >> 16) % 3); // 3-5
-      
-      // Calculate overall score
-      const overallRaw = (clarityScore + testabilityScore + completenessScore + scopeScore + consistencyScore) / 5;
-      const overall = Math.round(overallRaw * 10) / 10;
-      
-      // Determine needs_review based on scores
-      const needsReview = overall < 4 || testabilityScore < 3 || completenessScore < 3;
-      
-      // Generate flags based on hash
-      const possibleFlags = [
-        "ambiguous_scope",
-        "missing_edge_cases",
-        "unclear_acceptance_criteria",
-        "needs_refinement",
-        "broad_requirements",
-        "missing_error_handling"
-      ];
-      const flagCount = (hash >> 20) % 4; // 0-3 flags
-      const flags: string[] = [];
-      for (let i = 0; i < flagCount; i++) {
-        const flagIndex = ((hash >> (24 + i * 2)) % possibleFlags.length);
-        if (!flags.includes(possibleFlags[flagIndex])) {
-          flags.push(possibleFlags[flagIndex]);
+        // Seed includes raw_input + customPrompt + model to ensure presets influence output
+        const inputSeed = `${rawInputTrimmed}||${customPrompt}||${modelId}||${modelIndex}||${invocationSeed}`;
+        const hash = fnv1aHash(inputSeed);
+
+        // Derive scores from hash
+        const clarityScore = 3 + (hash % 3); // 3-5
+        const testabilityScore = 2 + ((hash >> 4) % 4); // 2-5
+        const completenessScore = 3 + ((hash >> 8) % 3); // 3-5
+        const scopeScore = 3 + ((hash >> 12) % 3); // 3-5
+        const consistencyScore = 3 + ((hash >> 16) % 3); // 3-5
+
+        const overallRaw =
+          (clarityScore +
+            testabilityScore +
+            completenessScore +
+            scopeScore +
+            consistencyScore) /
+          5;
+        const overall = Math.round(overallRaw * 10) / 10;
+
+        const needsReview =
+          overall < 4 || testabilityScore < 3 || completenessScore < 3;
+
+        const possibleFlags = [
+          "ambiguous_scope",
+          "missing_edge_cases",
+          "unclear_acceptance_criteria",
+          "needs_refinement",
+          "broad_requirements",
+          "missing_error_handling",
+        ];
+        const flagCount = (hash >> 20) % 4; // 0-3
+        const flags: string[] = [];
+        for (let i = 0; i < flagCount; i++) {
+          const flagIndex = (hash >> (24 + i * 2)) % possibleFlags.length;
+          if (!flags.includes(possibleFlags[flagIndex])) {
+            flags.push(possibleFlags[flagIndex]);
+          }
         }
-      }
-      if (modelFallbackUsed) flags.push("model_fallback_used");
+        if (modelFallbackUsed) flags.push("model_fallback_used");
 
-      // Generate varied titles based on input hash
-      const titleVariants = [
-        "User Authentication Flow",
-        "Secure Login Experience", 
-        "Account Access Management",
-        "Login and Registration System",
-        "User Session Handling"
-      ];
-      const titleIndex = hash % titleVariants.length;
-      const title = `${titleVariants[titleIndex]} (${variant_id})`;
+        // IMPORTANT: SINGLE mode must be derived from raw_input (no login templates)
+        // Compare mode may still differ by model/variant.
+        const title =
+          run_mode === "compare" ? `${baseTitle} (${variant_id})` : baseTitle;
 
-      // Generate varied descriptions based on input
-      const descriptionVariants = [
-        `As a registered user, I want to securely log in using my email and password so that I can access my personalized dashboard.`,
-        `As a user, I want to authenticate with my credentials so that my account remains protected and I can access features.`,
-        `As a returning user, I want a streamlined login process so that I can quickly access my saved data and preferences.`,
-        `As an account holder, I want secure authentication options so that I can protect my personal information while accessing the application.`
-      ];
-      const descIndex = (hash >> 6) % descriptionVariants.length;
-      const description = `${descriptionVariants[descIndex]} [${variant_id}]`;
+        const acceptanceCriteria = extractAcceptanceCriteria(rawInputTrimmed);
 
-      // Generate varied acceptance criteria based on hash
-      const acVariants = [
-        [
-          "User can enter email and password on login form",
-          "System validates credentials against stored hash",
-          "Successful login redirects to dashboard within 2 seconds",
-          "Failed login displays specific error message",
-          "Session token expires after 24 hours of inactivity"
-        ],
-        [
-          "Login form accepts email and password inputs",
-          "Invalid credentials show error feedback",
-          "Successful authentication grants access to protected routes"
-        ],
-        [
-          "User enters valid email format in login field",
-          "Password field masks input characters",
-          "Remember me checkbox persists session",
-          "Forgot password link sends recovery email"
-        ],
-        [
-          "Multi-factor authentication option available",
-          "Rate limiting prevents brute force attacks",
-          "Session invalidation on logout",
-          "Concurrent session handling with notification"
-        ]
-      ];
-      const acIndex = (hash >> 10) % acVariants.length;
-      const acceptanceCriteria = acVariants[acIndex];
+        const description =
+          baseDescription.length > 0
+            ? `As a user, I want ${baseDescription} so that I achieve the intended outcome.`
+            : "As a user, I want a clearly defined feature so that I can accomplish my goal.";
 
-      // DOR iterations based on model type and hash
-      const iterations = isOpenAI ? 1 : (1 + (hash % 3));
-      const dorPassed = overall >= 3.5;
+        const iterations = isOpenAI ? 1 : 1 + (hash % 3);
+        const dorPassed = overall >= 3.5;
 
-      const result: RunResult = {
-        run_id: crypto.randomUUID(),
-        model_id: actualModelId,
-        final_story: {
-          title,
-          description,
-          acceptance_criteria: acceptanceCriteria,
-        },
-        dor: { 
-          passed: dorPassed, 
-          iterations, 
-          fail_reasons: dorPassed ? [] : ["Quality threshold not met"] 
-        },
-        eval: {
-          overall,
-          needs_review: needsReview,
-          dimensions: {
-            clarity: clarityScore,
-            testability: testabilityScore,
-            completeness: completenessScore,
-            scope: scopeScore,
-            consistency: consistencyScore,
+        const result: RunResult = {
+          run_id: crypto.randomUUID(),
+          model_id: actualModelId,
+          final_story: {
+            title,
+            description,
+            acceptance_criteria: acceptanceCriteria,
           },
-          flags,
-        },
-      };
+          dor: {
+            passed: dorPassed,
+            iterations,
+            fail_reasons: dorPassed ? [] : ["Quality threshold not met"],
+          },
+          eval: {
+            overall,
+            needs_review: needsReview,
+            dimensions: {
+              clarity: clarityScore,
+              testability: testabilityScore,
+              completeness: completenessScore,
+              scope: scopeScore,
+              consistency: consistencyScore,
+            },
+            flags,
+          },
+        };
 
-      // Log per-run details
-      console.log(`[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} hash=${hash} fallback=${modelFallbackUsed}`);
+        console.log(
+          `[sb-run] requestId=${requestId} model_id=${actualModelId} title="${result.final_story.title}" overall=${result.eval.overall}`,
+        );
 
-      return result;
-    });
+        return result;
+      },
+    );
 
     const storyRows = runs.map((r) => ({
       session_id: sessionId,

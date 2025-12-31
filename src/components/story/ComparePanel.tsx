@@ -20,7 +20,11 @@ interface Run {
   model_id: string;
   story_id: string;
   final_story: FinalStory;
-  dor: string[];
+  dor: {
+    passed: boolean;
+    iterations: number;
+    fail_reasons: string[];
+  };
   eval: EvalResult;
 }
 

@@ -329,6 +329,27 @@ export function StoryBuilder({
       setSavedInput(rawInput);
       setSavedCustomPrompt(customPrompt);
       
+      // CRITICAL: Reset all previous run state before new generation
+      setRuns([]);
+      setActiveModelId(null);
+      setStory(prev => ({
+        ...prev,
+        title: '',
+        description: '',
+        acceptanceCriteria: [],
+        storyPoints: 0,
+        status: 'draft' as const
+      }));
+      setTestData({
+        userInputs: [],
+        edgeCases: [],
+        apiResponses: [],
+        codeSnippets: []
+      });
+      setHasDevNotes(false);
+      setHighlightedContent(null);
+      setDirtyCriteria(false);
+      
       onStoryGenerated?.();
       
       // Call sb-run edge function with selected mode

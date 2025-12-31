@@ -324,37 +324,11 @@ export function StoryBuilder({
 
   const generateStory = async () => {
     try {
-      // Reset previous run state so single + compare behave identically
-      setRuns([]);
-      setActiveModelId(null);
-      setHighlightedContent(null);
-      setHasDevNotes(false);
-      setDevNotesOpen(false);
-      setSavedOriginalStory(null);
-      setSavedOriginalTestData(null);
-      setOriginalTitle("");
-      setOriginalDescription("");
-      setDirtyCriteria(false);
-      setTestData({
-        userInputs: [],
-        edgeCases: [],
-        apiResponses: [],
-        codeSnippets: [],
-      });
-      setStory((prev) => ({
-        ...prev,
-        title: "",
-        description: "",
-        acceptanceCriteria: [],
-        storyPoints: 0,
-        status: "draft" as const,
-      }));
-
       setIsGenerating(true);
       setShowRawInput(false);
       setSavedInput(rawInput);
       setSavedCustomPrompt(customPrompt);
-
+      
       onStoryGenerated?.();
       
       // Call sb-run edge function with selected mode
@@ -580,14 +554,9 @@ export function StoryBuilder({
       setSelectedModel(preset.models[0]);
     }
 
-    // Clear previous results (and any stored original draft) to avoid reusing prior run data
+    // Clear previous results
     setRuns([]);
     setActiveModelId(null);
-    setSavedOriginalStory(null);
-    setSavedOriginalTestData(null);
-    setOriginalTitle("");
-    setOriginalDescription("");
-    setDirtyCriteria(false);
     setStory(prev => ({
       ...prev,
       title: '',
@@ -603,7 +572,6 @@ export function StoryBuilder({
       codeSnippets: []
     });
     setHasDevNotes(false);
-    setDevNotesOpen(false);
     setHighlightedContent(null);
 
     toast({

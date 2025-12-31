@@ -29,76 +29,6 @@ type RunResult = {
   };
 };
 
-function fnv1a(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    // 32-bit FNV-1a prime
-    hash = (hash * 0x01000193) >>> 0;
-  }
-  return hash >>> 0;
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function pickTitleFromInput(rawInput: string) {
-  const firstLine = rawInput
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .find((l) => l.length > 0);
-
-  if (!firstLine) return "New User Story";
-
-  // Keep it short and readable
-  return firstLine.length > 64 ? `${firstLine.slice(0, 61)}…` : firstLine;
-}
-
-function extractAcceptanceCriteria(rawInput: string) {
-  const lines = rawInput.split(/\r?\n/).map((l) => l.trim());
-  const bullets = lines
-    .filter((l) => /^(-|\*|\d+\.)\s+/.test(l))
-    .map((l) => l.replace(/^(-|\*|\d+\.)\s+/, ""))
-    .filter(Boolean);
-
-  // Keep it bounded
-  if (bullets.length > 0) return bullets.slice(0, 8);
-
-  // Fallback: generate a few generic but input-tied criteria
-  const topic = pickTitleFromInput(rawInput);
-  return [
-    `User can complete the core flow described in: ${topic}`,
-    "Validation errors are shown clearly without exposing sensitive info",
-    "Successful completion is confirmed with a clear success state",
-  ];
-}
-
-function computeEval(rawInput: string, modelId: string) {
-  const seed = fnv1a(`${rawInput}||${modelId}||${new Date().toISOString()}`);
-
-  // Overall in [2.6..4.9] (varies run-to-run and per input)
-  const overall = clamp(2.6 + (seed % 240) / 100, 1, 5);
-
-  const dimensions = {
-    clarity: clamp(2 + ((seed >>> 1) % 4), 1, 5),
-    testability: clamp(2 + ((seed >>> 3) % 4), 1, 5),
-    domain_correctness: clamp(2 + ((seed >>> 5) % 4), 1, 5),
-    completeness: clamp(2 + ((seed >>> 7) % 4), 1, 5),
-    scope: clamp(2 + ((seed >>> 9) % 4), 1, 5),
-  } as Record<string, number>;
-
-  const flags: string[] = [];
-  if (rawInput.trim().length < 120) flags.push("ambiguous_scope");
-  if (!/acceptance\s*criteria|\bAC\b/i.test(rawInput) && extractAcceptanceCriteria(rawInput).length <= 3) {
-    flags.push("missing_edge_cases");
-  }
-
-  const needs_review = overall < 4 || flags.length > 0;
-
-  return { overall: Math.round(overall * 10) / 10, needs_review, dimensions, flags };
-}
-
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   console.log(`[sb-run] requestId=${requestId}`);
@@ -171,69 +101,135 @@ serve(async (req) => {
 
     const sessionId = session.id;
 
-    const baseTitle = pickTitleFromInput(String(raw_input ?? ""));
-    const baseCriteria = extractAcceptanceCriteria(String(raw_input ?? ""));
-
     const runs: RunResult[] = effectiveModels.map((modelId: string) => {
       const isOpenAI = modelId.toLowerCase().includes("openai");
-      const isGemini =
-        modelId.toLowerCase().includes("gemini") ||
-        modelId.toLowerCase().includes("google");
-
+      const isGemini = modelId.toLowerCase().includes("gemini") || modelId.toLowerCase().includes("google");
+      
       // Determine variant_id
       const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : "UNKNOWN";
-
+      
       // Check for model availability and apply fallbacks if needed
       let actualModelId = modelId;
       let modelFallbackUsed = false;
-
+      
       // Simulate model availability check (in real implementation, this would check actual availability)
       const unavailableModels = new Set<string>(); // Add model IDs here if they become unavailable
-
+      
       if (unavailableModels.has(modelId)) {
         if (isOpenAI) {
           actualModelId = FALLBACK_OPENAI;
           modelFallbackUsed = true;
-          console.log(
-            `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`,
-          );
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`);
         } else if (isGemini) {
           actualModelId = FALLBACK_GEMINI;
           modelFallbackUsed = true;
-          console.log(
-            `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`,
-          );
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`);
         }
       }
 
-      // Generate a fresh per-run story + eval (tied to input, not cached)
-      const evalResult = computeEval(String(raw_input ?? ""), actualModelId);
-      if (modelFallbackUsed && !evalResult.flags.includes("model_fallback_used")) {
-        evalResult.flags.push("model_fallback_used");
+      let result: RunResult;
+
+      if (isOpenAI) {
+        // Variant A: OpenAI - polished, high scores, no review needed
+        const baseFlags: string[] = [];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
+        result = {
+          run_id: crypto.randomUUID(),
+          model_id: actualModelId,
+          final_story: {
+            title: `User Authentication Flow (${variant_id})`,
+            description:
+              `As a registered user, I want to securely log in using my email and password so that I can access my personalized dashboard. Model note: ${variant_id}`,
+            acceptance_criteria: [
+              "User can enter email and password on login form",
+              "System validates credentials against stored hash",
+              "Successful login redirects to dashboard within 2 seconds",
+              "Failed login displays specific error message",
+              "Session token expires after 24 hours of inactivity",
+            ],
+          },
+          dor: { passed: true, iterations: 1, fail_reasons: [] },
+          eval: {
+            overall: 4.6,
+            needs_review: false,
+            dimensions: {
+              clarity: 5,
+              testability: 5,
+              domain_correctness: 4,
+              completeness: 5,
+              scope: 4,
+            },
+            flags: baseFlags,
+          },
+        };
+      } else if (isGemini) {
+        // Variant B: Gemini - good but needs review, some flags
+        const baseFlags: string[] = ["ambiguous_scope", "missing_edge_cases"];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
+        result = {
+          run_id: crypto.randomUUID(),
+          model_id: actualModelId,
+          final_story: {
+            title: `Secure Login Experience (${variant_id})`,
+            description:
+              `As a user, I want to authenticate with my credentials so that my account remains protected and I can access features. Model note: ${variant_id}`,
+            acceptance_criteria: [
+              "Login form accepts email and password inputs",
+              "Invalid credentials show error feedback",
+              "Successful authentication grants access to protected routes",
+            ],
+          },
+          dor: { passed: true, iterations: 2, fail_reasons: [] },
+          eval: {
+            overall: 3.8,
+            needs_review: true,
+            dimensions: {
+              clarity: 4,
+              testability: 3,
+              domain_correctness: 4,
+              completeness: 3,
+              scope: 5,
+            },
+            flags: baseFlags,
+          },
+        };
+      } else {
+        // Fallback for unknown models
+        const baseFlags: string[] = ["needs_refinement"];
+        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
+        
+        result = {
+          run_id: crypto.randomUUID(),
+          model_id: actualModelId,
+          final_story: {
+            title: `Generic User Story (${variant_id})`,
+            description:
+              `As a user, I want this feature implemented so that I can accomplish my goal. Model note: ${variant_id}`,
+            acceptance_criteria: [
+              "Feature works as expected",
+              "No errors occur during usage",
+            ],
+          },
+          dor: { passed: true, iterations: 1, fail_reasons: [] },
+          eval: {
+            overall: 3.5,
+            needs_review: true,
+            dimensions: {
+              clarity: 3,
+              testability: 3,
+              domain_correctness: 4,
+              completeness: 3,
+              scope: 4,
+            },
+            flags: baseFlags,
+          },
+        };
       }
 
-      const titlePrefix = isOpenAI
-        ? "" // keep title clean
-        : isGemini
-          ? "" // keep title clean
-          : "";
-
-      const result: RunResult = {
-        run_id: crypto.randomUUID(),
-        model_id: actualModelId,
-        final_story: {
-          title: `${titlePrefix}${baseTitle} (${variant_id})`,
-          description: `As a user, I want ${baseTitle.toLowerCase()} so that I can achieve the intended outcome. Model note: ${variant_id}`,
-          acceptance_criteria: baseCriteria,
-        },
-        dor: { passed: true, iterations: 1, fail_reasons: [] },
-        eval: evalResult,
-      };
-
       // Log per-run details
-      console.log(
-        `[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} fallback=${modelFallbackUsed}`,
-      );
+      console.log(`[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} fallback=${modelFallbackUsed}`);
 
       return result;
     });

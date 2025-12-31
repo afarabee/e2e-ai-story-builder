@@ -19,7 +19,8 @@ import {
   RotateCcw,
   GitCompare,
   Sparkles,
-  ScrollText
+  ScrollText,
+  Zap
 } from "lucide-react";
 import { StoryVersion } from "@/hooks/useVersionHistory";
 import { DiffModal } from "@/components/version/DiffModal";
@@ -57,6 +58,7 @@ interface ProjectSidebarProps {
   selectedPreset?: string;
   onPresetChange?: (value: string) => void;
   onApplyPreset?: () => void;
+  onRunPreset?: (presetId: string) => void;
   // Prompt version props
   promptVersions?: PromptVersion[];
   selectedPromptVersionId?: string;
@@ -74,6 +76,7 @@ export function ProjectSidebar({
   selectedPreset = '',
   onPresetChange,
   onApplyPreset,
+  onRunPreset,
   promptVersions = [],
   selectedPromptVersionId = '',
   onSelectPromptVersion,
@@ -260,15 +263,27 @@ export function ProjectSidebar({
               ))}
             </SelectContent>
           </Select>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="w-full"
-            onClick={onApplyPreset}
-            disabled={!selectedPreset}
-          >
-            Apply Preset
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="default" 
+              size="sm"
+              className="flex-1"
+              onClick={() => selectedPreset && onRunPreset?.(selectedPreset)}
+              disabled={!selectedPreset}
+            >
+              <Zap className="h-4 w-4 mr-1" />
+              Run Preset
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="flex-1"
+              onClick={onApplyPreset}
+              disabled={!selectedPreset}
+            >
+              Apply Only
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

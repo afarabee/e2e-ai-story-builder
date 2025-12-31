@@ -115,7 +115,8 @@ interface StoryBuilderProps {
   onSetPresetHandlers?: (
     selectedPreset: string,
     onPresetChange: (value: string) => void,
-    onApplyPreset: () => void
+    onApplyPreset: () => void,
+    onRunPreset: (presetId: string) => void
   ) => void;
 }
 
@@ -212,7 +213,7 @@ export function StoryBuilder({
   // Register preset handlers for external use (sidebar)
   useEffect(() => {
     if (onSetPresetHandlers) {
-      onSetPresetHandlers(selectedPreset, setSelectedPreset, applyPreset);
+      onSetPresetHandlers(selectedPreset, setSelectedPreset, applyPreset, runPreset);
     }
   }, [onSetPresetHandlers, selectedPreset]);
 
@@ -610,6 +611,145 @@ export function StoryBuilder({
       title: "Preset Applied",
       description: `"${preset.name}" loaded. Click Generate to create the story.`,
     });
+  };
+
+  // Run preset: apply + generate in one step, building request directly from preset object
+  const runPreset = async (presetId: string) => {
+    const preset = PRESETS.find(p => p.id === presetId);
+    if (!preset) {
+      toast({
+        title: "Preset Not Found",
+        description: "Could not find the selected preset.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      setShowRawInput(false);
+
+      // Set UI state from preset
+      setRawInput(preset.rawInput);
+      setCustomPrompt(preset.customPrompt || '');
+      const mode = preset.mode ?? 'single';
+      setRunMode(mode);
+      if (preset.models?.[0]) {
+        setSelectedModel(preset.models[0]);
+      }
+      setSavedInput(preset.rawInput);
+      setSavedCustomPrompt(preset.customPrompt || '');
+
+      // Reset all previous run state (same as generateStory)
+      setRuns([]);
+      setActiveModelId(null);
+      setHighlightedContent(null);
+      setHasDevNotes(false);
+      setDirtyCriteria(false);
+      setOriginalTitle("");
+      setOriginalDescription("");
+      setStory((prev) => ({
+        ...prev,
+        title: "",
+        description: "",
+        acceptanceCriteria: [],
+        storyPoints: 0,
+        status: "draft" as const,
+      }));
+      setTestData({
+        userInputs: [],
+        edgeCases: [],
+        apiResponses: [],
+        codeSnippets: [],
+      });
+
+      onStoryGenerated?.();
+
+      // Build request body directly from preset (NOT from React state)
+      const models = mode === 'compare'
+        ? (preset.models ?? ['openai:gpt-5-nano', 'google:gemini-2.5-flash-lite'])
+        : [preset.models?.[0] ?? 'openai:gpt-5-nano'];
+
+      const { data, error } = await supabase.functions.invoke('sb-run', {
+        body: {
+          raw_input: preset.rawInput,
+          project_settings: { customPrompt: preset.customPrompt ?? '' },
+          run_mode: mode,
+          models,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.runs?.length) throw new Error('No stories returned from backend');
+
+      // Store all runs for compare view
+      setRuns(data.runs);
+
+      // Set active model for single mode indicator
+      if (mode === 'single' && data.runs[0]?.model_id) {
+        setActiveModelId(data.runs[0].model_id);
+      }
+
+      // Update story state from first run (same as generateStory)
+      const run = data.runs[0];
+      const finalStory = run.final_story;
+      const generatedStory = {
+        ...story,
+        title: finalStory.title,
+        description: finalStory.description,
+        acceptanceCriteria: finalStory.acceptance_criteria || [],
+        storyPoints: 3,
+        status: 'ready' as const
+      };
+
+      const generatedTestData = {
+        userInputs: [],
+        edgeCases: [],
+        apiResponses: [],
+        codeSnippets: []
+      };
+
+      setStory(generatedStory);
+      setTestData(generatedTestData);
+      setOriginalTitle(generatedStory.title);
+      setOriginalDescription(generatedStory.description);
+      setDirtyCriteria(false);
+
+      setSavedOriginalStory({
+        title: generatedStory.title,
+        description: generatedStory.description,
+        acceptanceCriteria: [...generatedStory.acceptanceCriteria],
+        storyPoints: generatedStory.storyPoints
+      });
+      setSavedOriginalTestData({ ...generatedTestData });
+
+      onStoryUpdate?.(generatedStory);
+
+      // Auto-save version after generation
+      const storyContent = {
+        title: generatedStory.title,
+        description: generatedStory.description,
+        acceptanceCriteria: generatedStory.acceptanceCriteria,
+        storyPoints: generatedStory.storyPoints,
+        testData: generatedTestData
+      };
+      saveVersion(storyContent, "Initial Generation");
+      setLastAutoSaveContent(JSON.stringify(storyContent));
+
+      toast({
+        title: "Stories Generated",
+        description: `Generated ${data.runs.length} story run(s) from "${preset.name}".`,
+      });
+    } catch (error) {
+      console.error("Error running preset:", error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to run preset. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const restartStory = () => {

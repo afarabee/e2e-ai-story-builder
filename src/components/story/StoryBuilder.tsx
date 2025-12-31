@@ -33,7 +33,8 @@ import {
   Minus,
   History,
   MessageSquare,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  ArrowLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SettingsModal } from "@/components/settings/SettingsModal";
@@ -184,6 +185,8 @@ export function StoryBuilder({
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [highlightedContent, setHighlightedContent] = useState<{ field: string, index?: number } | null>(null);
   const [showNewStoryConfirm, setShowNewStoryConfirm] = useState(false);
+  // State for editing a specific version from compare view
+  const [isEditingFromCompare, setIsEditingFromCompare] = useState(false);
   
   // Auto-save state
   const [lastAutoSaveContent, setLastAutoSaveContent] = useState<string>('');
@@ -512,6 +515,7 @@ export function StoryBuilder({
       setActiveModelId(null);
       setRunMode('single');
       setSelectedModel('openai:gpt-5-nano');
+      setIsEditingFromCompare(false);
       
       clearVersions();
       setLastAutoSaveContent('');
@@ -752,6 +756,48 @@ export function StoryBuilder({
     }
   };
 
+  // Handle editing a specific version from compare view
+  const handleEditVersion = (run: RunResponse) => {
+    // Set active model to this run's model
+    setActiveModelId(run.model_id);
+    
+    // Populate the story form with this run's content
+    const editedStory = {
+      ...story,
+      title: run.final_story.title,
+      description: run.final_story.description,
+      acceptanceCriteria: run.final_story.acceptance_criteria || [],
+      storyPoints: 3,
+      status: 'ready' as const
+    };
+    
+    setStory(editedStory);
+    setOriginalTitle(editedStory.title);
+    setOriginalDescription(editedStory.description);
+    setDirtyCriteria(false);
+    setIsEditingFromCompare(true);
+    
+    // Save version noting edit started
+    saveVersion({
+      title: editedStory.title,
+      description: editedStory.description,
+      acceptanceCriteria: editedStory.acceptanceCriteria,
+      storyPoints: editedStory.storyPoints,
+      testData
+    }, `Editing ${run.model_id} version`);
+    
+    toast({
+      title: "Editing Version",
+      description: `Now editing the ${run.model_id} version. Changes are editable below.`,
+    });
+  };
+
+  // Return to compare view from editing
+  const handleBackToCompare = () => {
+    setIsEditingFromCompare(false);
+    setActiveModelId(null);
+  };
+
   const restartStory = () => {
     if (!savedOriginalStory) return;
     
@@ -780,6 +826,7 @@ export function StoryBuilder({
     setOriginalDescription(savedOriginalStory.description);
     setDirtyCriteria(false);
     setActiveModelId(null);
+    setIsEditingFromCompare(false);
     
     // Save a version noting the restart
     saveVersion({
@@ -1273,15 +1320,190 @@ export function StoryBuilder({
         </Card>
       )}
 
-      {/* Compare View - Side by Side Panels */}
-      {storyGenerated && runs.length === 2 && (
+      {/* Compare View - Side by Side Panels (only show when not editing a version) */}
+      {storyGenerated && runs.length === 2 && !isEditingFromCompare && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">Compare Generated Stories</h3>
           <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
             {runs.map((run) => (
-              <ComparePanel key={run.run_id} run={run} />
+              <ComparePanel 
+                key={run.run_id} 
+                run={run} 
+                onEditVersion={handleEditVersion}
+              />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Editing from Compare View - Show editable form with Back button */}
+      {storyGenerated && runs.length === 2 && isEditingFromCompare && (
+        <div className="grid gap-6 grid-cols-1">
+          {/* Back to Compare button */}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleBackToCompare}
+            className="w-fit gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Compare
+          </Button>
+
+          {/* Main Story Content */}
+          <div className="space-y-6 col-span-1">
+            <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                User Story Details
+                {activeModelId && (
+                  <Badge variant="outline" className="text-xs">
+                    Editing: {activeModelId}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="story-title">Title</Label>
+                <Input 
+                  id="story-title"
+                  value={story.title}
+                  onChange={(e) => setStory(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Enter story title..."
+                  className={cn(
+                    highlightedContent?.field === 'story-title' && "text-highlight-applied"
+                  )}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="story-description">Description</Label>
+                <Textarea 
+                  id="story-description"
+                  value={story.description}
+                  onChange={(e) => setStory(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="As a [user], I want [goal] so that [benefit]..."
+                  rows={3}
+                  className={cn(
+                    highlightedContent?.field === 'story-description' && "text-highlight-applied"
+                  )}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Label>Acceptance Criteria</Label>
+                    {dirtyCriteria && (
+                      <Badge variant="outline" title="Criteria may be out of sync" className="text-xs">
+                        ⚠️
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={regenerateCriteria}
+                      className="gap-1 text-xs"
+                      title="Refresh acceptance criteria based on current Title & Description"
+                      disabled={isGenerating}
+                    >
+                      <RefreshCw className={cn("h-4 w-4", isGenerating && "animate-spin")} />
+                      Regenerate Criteria
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStory(prev => ({ 
+                        ...prev, 
+                        acceptanceCriteria: [...prev.acceptanceCriteria, ""] 
+                      }))}
+                      className="gap-1 text-xs"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Criterion
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2 mt-2">
+                  {story.acceptanceCriteria.map((criterion, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0" />
+                        <Input
+                          value={criterion}
+                          onChange={(e) => {
+                            const newCriteria = [...story.acceptanceCriteria];
+                            newCriteria[index] = e.target.value;
+                            setStory(prev => ({ ...prev, acceptanceCriteria: newCriteria }));
+                          }}
+                          placeholder="Enter acceptance criterion..."
+                          className={cn(
+                            "text-sm flex-1",
+                            highlightedContent?.field === 'acceptance-criteria' && 
+                            highlightedContent?.index === index && 
+                            "text-highlight-applied"
+                          )}
+                        />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newCriteria = story.acceptanceCriteria.filter((_, i) => i !== index);
+                          setStory(prev => ({ ...prev, acceptanceCriteria: newCriteria }));
+                        }}
+                        className="p-1 h-8 w-8"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  {story.acceptanceCriteria.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">
+                      No acceptance criteria. Click "Add Criterion" to add one.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="story-points">Story Points</Label>
+                  <Select value={story.storyPoints.toString()} onValueChange={(value) => setStory(prev => ({ ...prev, storyPoints: parseInt(value) }))}>
+                    <SelectTrigger className={cn(
+                      "w-24",
+                      highlightedContent?.field === 'story-points' && "text-highlight-applied"
+                    )}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[0, 1, 2, 3, 5, 8, 13].map(points => (
+                        <SelectItem key={points} value={points.toString()}>{points}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveManual}
+                  className="gap-2"
+                  disabled={!story.title}
+                >
+                  <History className="h-3 w-3" />
+                  Save Version
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Show eval for the active run being edited */}
+          {runs.find(r => r.model_id === activeModelId)?.eval && (
+            <RunEvaluationCard evalResult={runs.find(r => r.model_id === activeModelId)!.eval} />
+          )}
+        </div>
         </div>
       )}
 

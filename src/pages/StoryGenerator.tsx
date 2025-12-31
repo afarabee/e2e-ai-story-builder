@@ -34,7 +34,6 @@ const StoryGenerator = () => {
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const presetChangeRef = useRef<((value: string) => void) | null>(null);
   const applyPresetRef = useRef<(() => void) | null>(null);
-  const runPresetRef = useRef<(() => void) | null>(null);
 
   // Prompt version state
   const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
@@ -154,12 +153,6 @@ const StoryGenerator = () => {
     }
   };
 
-  const handleRunPreset = () => {
-    if (runPresetRef.current) {
-      runPresetRef.current();
-    }
-  };
-
   return (
     <AppLayout
       sidebarContent={
@@ -172,7 +165,6 @@ const StoryGenerator = () => {
           selectedPreset={selectedPreset}
           onPresetChange={handlePresetChange}
           onApplyPreset={handleApplyPreset}
-          onRunPreset={handleRunPreset}
           promptVersions={promptVersions}
           selectedPromptVersionId={selectedPromptVersionId}
           onSelectPromptVersion={handleSelectPromptVersion}
@@ -211,11 +203,10 @@ const StoryGenerator = () => {
         onSetNewStoryHandler={(newStoryHandler) => {
           newStoryRef.current = newStoryHandler;
         }}
-        onSetPresetHandlers={(currentPreset, presetChange, applyPreset, runPreset) => {
+        onSetPresetHandlers={(currentPreset, presetChange, applyPreset) => {
           setSelectedPreset(currentPreset);
           presetChangeRef.current = presetChange;
           applyPresetRef.current = applyPreset;
-          runPresetRef.current = runPreset;
         }}
       />
 

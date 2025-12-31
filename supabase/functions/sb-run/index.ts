@@ -101,7 +101,20 @@ serve(async (req) => {
 
     const sessionId = session.id;
 
-    const runs: RunResult[] = effectiveModels.map((modelId: string) => {
+    // FNV-1a hash for deterministic variation based on input
+    const fnv1aHash = (str: string): number => {
+      let hash = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i);
+        hash = (hash * 16777619) >>> 0;
+      }
+      return hash;
+    };
+
+    // Generate unique run_id per invocation to prevent caching issues
+    const invocationSeed = `${requestId}-${Date.now()}`;
+
+    const runs: RunResult[] = effectiveModels.map((modelId: string, modelIndex: number) => {
       const isOpenAI = modelId.toLowerCase().includes("openai");
       const isGemini = modelId.toLowerCase().includes("gemini") || modelId.toLowerCase().includes("google");
       
@@ -127,109 +140,127 @@ serve(async (req) => {
         }
       }
 
-      let result: RunResult;
-
-      if (isOpenAI) {
-        // Variant A: OpenAI - polished, high scores, no review needed
-        const baseFlags: string[] = [];
-        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
-        
-        result = {
-          run_id: crypto.randomUUID(),
-          model_id: actualModelId,
-          final_story: {
-            title: `User Authentication Flow (${variant_id})`,
-            description:
-              `As a registered user, I want to securely log in using my email and password so that I can access my personalized dashboard. Model note: ${variant_id}`,
-            acceptance_criteria: [
-              "User can enter email and password on login form",
-              "System validates credentials against stored hash",
-              "Successful login redirects to dashboard within 2 seconds",
-              "Failed login displays specific error message",
-              "Session token expires after 24 hours of inactivity",
-            ],
-          },
-          dor: { passed: true, iterations: 1, fail_reasons: [] },
-          eval: {
-            overall: 4.6,
-            needs_review: false,
-            dimensions: {
-              clarity: 5,
-              testability: 5,
-              domain_correctness: 4,
-              completeness: 5,
-              scope: 4,
-            },
-            flags: baseFlags,
-          },
-        };
-      } else if (isGemini) {
-        // Variant B: Gemini - good but needs review, some flags
-        const baseFlags: string[] = ["ambiguous_scope", "missing_edge_cases"];
-        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
-        
-        result = {
-          run_id: crypto.randomUUID(),
-          model_id: actualModelId,
-          final_story: {
-            title: `Secure Login Experience (${variant_id})`,
-            description:
-              `As a user, I want to authenticate with my credentials so that my account remains protected and I can access features. Model note: ${variant_id}`,
-            acceptance_criteria: [
-              "Login form accepts email and password inputs",
-              "Invalid credentials show error feedback",
-              "Successful authentication grants access to protected routes",
-            ],
-          },
-          dor: { passed: true, iterations: 2, fail_reasons: [] },
-          eval: {
-            overall: 3.8,
-            needs_review: true,
-            dimensions: {
-              clarity: 4,
-              testability: 3,
-              domain_correctness: 4,
-              completeness: 3,
-              scope: 5,
-            },
-            flags: baseFlags,
-          },
-        };
-      } else {
-        // Fallback for unknown models
-        const baseFlags: string[] = ["needs_refinement"];
-        if (modelFallbackUsed) baseFlags.push("model_fallback_used");
-        
-        result = {
-          run_id: crypto.randomUUID(),
-          model_id: actualModelId,
-          final_story: {
-            title: `Generic User Story (${variant_id})`,
-            description:
-              `As a user, I want this feature implemented so that I can accomplish my goal. Model note: ${variant_id}`,
-            acceptance_criteria: [
-              "Feature works as expected",
-              "No errors occur during usage",
-            ],
-          },
-          dor: { passed: true, iterations: 1, fail_reasons: [] },
-          eval: {
-            overall: 3.5,
-            needs_review: true,
-            dimensions: {
-              clarity: 3,
-              testability: 3,
-              domain_correctness: 4,
-              completeness: 3,
-              scope: 4,
-            },
-            flags: baseFlags,
-          },
-        };
+      // Create unique seed per model+input combination for deterministic but varied output
+      const inputSeed = `${raw_input || ''}-${modelId}-${modelIndex}-${invocationSeed}`;
+      const hash = fnv1aHash(inputSeed);
+      
+      // Derive scores from hash (ensures different inputs = different scores)
+      const clarityScore = 3 + (hash % 3); // 3-5
+      const testabilityScore = 2 + ((hash >> 4) % 4); // 2-5
+      const completenessScore = 3 + ((hash >> 8) % 3); // 3-5
+      const scopeScore = 3 + ((hash >> 12) % 3); // 3-5
+      const consistencyScore = 3 + ((hash >> 16) % 3); // 3-5
+      
+      // Calculate overall score
+      const overallRaw = (clarityScore + testabilityScore + completenessScore + scopeScore + consistencyScore) / 5;
+      const overall = Math.round(overallRaw * 10) / 10;
+      
+      // Determine needs_review based on scores
+      const needsReview = overall < 4 || testabilityScore < 3 || completenessScore < 3;
+      
+      // Generate flags based on hash
+      const possibleFlags = [
+        "ambiguous_scope",
+        "missing_edge_cases",
+        "unclear_acceptance_criteria",
+        "needs_refinement",
+        "broad_requirements",
+        "missing_error_handling"
+      ];
+      const flagCount = (hash >> 20) % 4; // 0-3 flags
+      const flags: string[] = [];
+      for (let i = 0; i < flagCount; i++) {
+        const flagIndex = ((hash >> (24 + i * 2)) % possibleFlags.length);
+        if (!flags.includes(possibleFlags[flagIndex])) {
+          flags.push(possibleFlags[flagIndex]);
+        }
       }
+      if (modelFallbackUsed) flags.push("model_fallback_used");
+
+      // Generate varied titles based on input hash
+      const titleVariants = [
+        "User Authentication Flow",
+        "Secure Login Experience", 
+        "Account Access Management",
+        "Login and Registration System",
+        "User Session Handling"
+      ];
+      const titleIndex = hash % titleVariants.length;
+      const title = `${titleVariants[titleIndex]} (${variant_id})`;
+
+      // Generate varied descriptions based on input
+      const descriptionVariants = [
+        `As a registered user, I want to securely log in using my email and password so that I can access my personalized dashboard.`,
+        `As a user, I want to authenticate with my credentials so that my account remains protected and I can access features.`,
+        `As a returning user, I want a streamlined login process so that I can quickly access my saved data and preferences.`,
+        `As an account holder, I want secure authentication options so that I can protect my personal information while accessing the application.`
+      ];
+      const descIndex = (hash >> 6) % descriptionVariants.length;
+      const description = `${descriptionVariants[descIndex]} [${variant_id}]`;
+
+      // Generate varied acceptance criteria based on hash
+      const acVariants = [
+        [
+          "User can enter email and password on login form",
+          "System validates credentials against stored hash",
+          "Successful login redirects to dashboard within 2 seconds",
+          "Failed login displays specific error message",
+          "Session token expires after 24 hours of inactivity"
+        ],
+        [
+          "Login form accepts email and password inputs",
+          "Invalid credentials show error feedback",
+          "Successful authentication grants access to protected routes"
+        ],
+        [
+          "User enters valid email format in login field",
+          "Password field masks input characters",
+          "Remember me checkbox persists session",
+          "Forgot password link sends recovery email"
+        ],
+        [
+          "Multi-factor authentication option available",
+          "Rate limiting prevents brute force attacks",
+          "Session invalidation on logout",
+          "Concurrent session handling with notification"
+        ]
+      ];
+      const acIndex = (hash >> 10) % acVariants.length;
+      const acceptanceCriteria = acVariants[acIndex];
+
+      // DOR iterations based on model type and hash
+      const iterations = isOpenAI ? 1 : (1 + (hash % 3));
+      const dorPassed = overall >= 3.5;
+
+      const result: RunResult = {
+        run_id: crypto.randomUUID(),
+        model_id: actualModelId,
+        final_story: {
+          title,
+          description,
+          acceptance_criteria: acceptanceCriteria,
+        },
+        dor: { 
+          passed: dorPassed, 
+          iterations, 
+          fail_reasons: dorPassed ? [] : ["Quality threshold not met"] 
+        },
+        eval: {
+          overall,
+          needs_review: needsReview,
+          dimensions: {
+            clarity: clarityScore,
+            testability: testabilityScore,
+            completeness: completenessScore,
+            scope: scopeScore,
+            consistency: consistencyScore,
+          },
+          flags,
+        },
+      };
 
       // Log per-run details
-      console.log(`[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} fallback=${modelFallbackUsed}`);
+      console.log(`[sb-run] requestId=${requestId} model=${actualModelId} variant=${variant_id} overall=${result.eval.overall} hash=${hash} fallback=${modelFallbackUsed}`);
 
       return result;
     });

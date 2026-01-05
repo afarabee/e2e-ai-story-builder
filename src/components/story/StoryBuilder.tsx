@@ -1063,6 +1063,23 @@ export function StoryBuilder({
     saveVersion(storyContent, "Manual Save");
     setLastAutoSaveContent(JSON.stringify(storyContent));
     
+    // Patch runs array when editing from compare view
+    if (isEditingFromCompare && activeModelId) {
+      setRuns(prev => prev.map(r => 
+        r.model_id === activeModelId 
+          ? {
+              ...r,
+              final_story: {
+                ...r.final_story,
+                title: story.title,
+                description: story.description,
+                acceptance_criteria: story.acceptanceCriteria
+              }
+            }
+          : r
+      ));
+    }
+    
     toast({
       title: "Version saved",
       description: "Current story state has been saved",

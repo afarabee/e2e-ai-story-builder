@@ -35,7 +35,37 @@ type RunResult = {
       messages: Array<{ role: string; content: string }>;
       payload: unknown;
     };
+    llm_error?: string;
   };
+};
+
+// JSON schema for tool calling - forces structured output
+const STORY_SCHEMA = {
+  type: "function",
+  function: {
+    name: "generate_user_story",
+    description: "Generate a structured user story with title, description in 'As a [role], I want [goal], so that [benefit]' format, and 3-7 testable acceptance criteria",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { 
+          type: "string", 
+          description: "A clear, concise title for the user story (5-10 words)" 
+        },
+        description: { 
+          type: "string", 
+          description: "User story in 'As a [role], I want [goal], so that [benefit]' format" 
+        },
+        acceptance_criteria: { 
+          type: "array", 
+          items: { type: "string" },
+          description: "3-7 testable acceptance criteria as bullet points"
+        }
+      },
+      required: ["title", "description", "acceptance_criteria"],
+      additionalProperties: false
+    }
+  }
 };
 
 // Sensitive keys to redact (case-insensitive) - expanded list
@@ -89,6 +119,351 @@ function fillPromptTemplate(template: string, inputs: Record<string, string>): s
   return filled;
 }
 
+// Call Lovable AI Gateway
+async function callLovableAI(
+  modelId: string, 
+  messages: Array<{ role: string; content: string }>,
+  requestId: string
+): Promise<{ success: boolean; data?: { title: string; description: string; acceptance_criteria: string[] }; error?: string; payload?: unknown }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    return { success: false, error: "LOVABLE_API_KEY not configured" };
+  }
+
+  // Map model IDs to Lovable AI format: "openai:gpt-5-nano" -> "openai/gpt-5-nano"
+  const lovableModelId = modelId.replace(":", "/");
+
+  const payload = {
+    model: lovableModelId,
+    messages,
+    tools: [STORY_SCHEMA],
+    tool_choice: { type: "function", function: { name: "generate_user_story" } },
+    // Also add response_format hint for models that support it
+    response_format: { type: "json_object" }
+  };
+
+  try {
+    console.log(`[sb-run] requestId=${requestId} calling Lovable AI model=${lovableModelId}`);
+    
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[sb-run] requestId=${requestId} LLM error: ${response.status} ${errorText}`);
+      
+      if (response.status === 429) {
+        return { success: false, error: "Rate limit exceeded, please try again later", payload };
+      }
+      if (response.status === 402) {
+        return { success: false, error: "Payment required, please add credits to workspace", payload };
+      }
+      return { success: false, error: `LLM API error: ${response.status}`, payload };
+    }
+
+    const result = await response.json();
+    
+    // Extract tool call response (primary path)
+    const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        console.log(`[sb-run] requestId=${requestId} parsed tool call response`);
+        return { success: true, data: parsed, payload };
+      } catch (parseErr) {
+        console.error(`[sb-run] requestId=${requestId} failed to parse tool call arguments:`, parseErr);
+      }
+    }
+
+    // Fallback: try to parse content directly as JSON
+    const content = result.choices?.[0]?.message?.content;
+    if (content) {
+      try {
+        // Try direct JSON parse
+        const parsed = JSON.parse(content);
+        console.log(`[sb-run] requestId=${requestId} parsed content as JSON fallback`);
+        return { success: true, data: parsed, payload };
+      } catch {
+        // Try to extract JSON from markdown code block
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[1].trim());
+            console.log(`[sb-run] requestId=${requestId} parsed JSON from markdown block`);
+            return { success: true, data: parsed, payload };
+          } catch {
+            // Fall through
+          }
+        }
+        return { success: false, error: "Failed to parse LLM response as JSON", payload };
+      }
+    }
+
+    return { success: false, error: "No valid response from LLM", payload };
+  } catch (err) {
+    console.error(`[sb-run] requestId=${requestId} LLM call failed:`, err);
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error", payload };
+  }
+}
+
+// Validate story structure
+function validateStory(story: unknown): { valid: boolean; issues: string[]; normalized?: { title: string; description: string; acceptance_criteria: string[] } } {
+  const issues: string[] = [];
+  
+  if (!story || typeof story !== 'object') {
+    return { valid: false, issues: ["Response is not an object"] };
+  }
+
+  const s = story as Record<string, unknown>;
+  
+  const title = typeof s.title === 'string' && s.title.trim().length >= 3 ? s.title.trim() : null;
+  const description = typeof s.description === 'string' && s.description.trim().length >= 10 ? s.description.trim() : null;
+  
+  if (!title) issues.push("Missing or invalid title");
+  if (!description) issues.push("Missing or invalid description");
+  
+  // Normalize acceptance_criteria to string array
+  let acceptance_criteria: string[] = [];
+  if (Array.isArray(s.acceptance_criteria)) {
+    acceptance_criteria = s.acceptance_criteria
+      .filter(c => typeof c === 'string' && c.trim().length > 0)
+      .map(c => (c as string).trim())
+      .slice(0, 7);
+  }
+  
+  if (acceptance_criteria.length < 3) {
+    issues.push(`Only ${acceptance_criteria.length} acceptance criteria (need 3-7)`);
+  }
+  
+  if (title && description && acceptance_criteria.length >= 3) {
+    return { 
+      valid: true, 
+      issues: [], 
+      normalized: { title, description, acceptance_criteria } 
+    };
+  }
+  
+  // Partial success: have title/description but not enough ACs
+  if (title && description) {
+    return {
+      valid: false,
+      issues,
+      normalized: { title, description, acceptance_criteria }
+    };
+  }
+  
+  return { valid: false, issues };
+}
+
+// Repair acceptance criteria with a focused LLM call
+async function repairAcceptanceCriteria(
+  story: { title: string; description: string },
+  modelId: string,
+  requestId: string
+): Promise<{ success: boolean; criteria: string[]; error?: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    return { success: false, criteria: [], error: "LOVABLE_API_KEY not configured" };
+  }
+
+  const lovableModelId = modelId.replace(":", "/");
+
+  const repairPayload = {
+    model: lovableModelId,
+    messages: [
+      {
+        role: "system",
+        content: "You are an expert at writing testable acceptance criteria for user stories. Return ONLY a JSON array of 5 acceptance criteria strings, no other text."
+      },
+      {
+        role: "user",
+        content: `Generate exactly 5 testable acceptance criteria for this user story:
+
+Title: ${story.title}
+Description: ${story.description}
+
+Return ONLY a JSON array of 5 strings. Example format:
+["User can...", "System validates...", "Error message shows...", "Data is saved...", "UI updates..."]`
+      }
+    ],
+    response_format: { type: "json_object" }
+  };
+
+  try {
+    console.log(`[sb-run] requestId=${requestId} repair AC call for model=${lovableModelId}`);
+    
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(repairPayload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[sb-run] requestId=${requestId} repair call error: ${response.status}`);
+      return { success: false, criteria: [], error: `Repair API error: ${response.status}` };
+    }
+
+    const result = await response.json();
+    const content = result.choices?.[0]?.message?.content;
+    
+    if (content) {
+      try {
+        const parsed = JSON.parse(content);
+        // Handle both direct array and { acceptance_criteria: [...] } formats
+        const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.acceptance_criteria) ? parsed.acceptance_criteria : null);
+        if (arr && arr.length >= 3) {
+          const criteria = arr.filter((c: unknown) => typeof c === 'string').slice(0, 7);
+          if (criteria.length >= 3) {
+            console.log(`[sb-run] requestId=${requestId} repair succeeded with ${criteria.length} ACs`);
+            return { success: true, criteria };
+          }
+        }
+      } catch {
+        // Try extracting array from text
+        const match = content.match(/\[[\s\S]*\]/);
+        if (match) {
+          try {
+            const arr = JSON.parse(match[0]);
+            if (Array.isArray(arr) && arr.length >= 3) {
+              const criteria = arr.filter((c: unknown) => typeof c === 'string').slice(0, 7);
+              return { success: true, criteria };
+            }
+          } catch {
+            // Fall through
+          }
+        }
+      }
+    }
+    
+    return { success: false, criteria: [], error: "Failed to parse repair response" };
+  } catch (err) {
+    console.error(`[sb-run] requestId=${requestId} repair call failed:`, err);
+    return { success: false, criteria: [], error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// Run DoR validation on generated story
+function runDoRValidation(story: { title: string; description: string; acceptance_criteria: string[] }, llmError?: string): { passed: boolean; fail_reasons: string[] } {
+  const fail_reasons: string[] = [];
+  
+  // If LLM errored, DoR fails
+  if (llmError) {
+    fail_reasons.push(`LLM error: ${llmError}`);
+  }
+  
+  // Title validation
+  if (!story.title || story.title.length < 3) {
+    fail_reasons.push("Title is missing or too short");
+  }
+  
+  // Description format validation - should follow "As a... I want... so that..." pattern
+  const descLower = story.description?.toLowerCase() || '';
+  if (!descLower.includes('as a') || !descLower.includes('want') || !descLower.includes('so that')) {
+    fail_reasons.push("Description does not follow 'As a [role], I want [goal], so that [benefit]' format");
+  }
+  
+  // Acceptance criteria validation
+  if (!story.acceptance_criteria || story.acceptance_criteria.length < 3) {
+    fail_reasons.push(`Insufficient acceptance criteria (${story.acceptance_criteria?.length || 0}, need 3-7)`);
+  } else if (story.acceptance_criteria.length > 7) {
+    fail_reasons.push(`Too many acceptance criteria (${story.acceptance_criteria.length}, max 7)`);
+  }
+  
+  // Check for testable ACs (should have action verbs)
+  const actionVerbs = /^(user can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable)/i;
+  const testableCount = story.acceptance_criteria?.filter(ac => actionVerbs.test(ac.trim())).length || 0;
+  if (story.acceptance_criteria && testableCount < Math.ceil(story.acceptance_criteria.length / 2)) {
+    fail_reasons.push("Less than half of acceptance criteria appear testable");
+  }
+  
+  return {
+    passed: fail_reasons.length === 0,
+    fail_reasons
+  };
+}
+
+// Calculate eval scores from story quality
+function calculateEvalScores(story: { title: string; description: string; acceptance_criteria: string[] }, dorResult: { passed: boolean; fail_reasons: string[] }, llmError?: string): {
+  overall: number;
+  needs_review: boolean;
+  dimensions: Record<string, number>;
+  flags: string[];
+} {
+  const flags: string[] = [];
+  
+  // If LLM errored, set low scores and flag
+  if (llmError) {
+    flags.push("llm_error");
+    return {
+      overall: 1.0,
+      needs_review: true,
+      dimensions: { clarity: 1, testability: 1, completeness: 1, scope: 1, consistency: 1 },
+      flags
+    };
+  }
+  
+  // Calculate clarity score (based on description format)
+  const descLower = story.description?.toLowerCase() || '';
+  let clarity = 3;
+  if (descLower.includes('as a') && descLower.includes('want') && descLower.includes('so that')) {
+    clarity = 5;
+  } else if (descLower.includes('want') || descLower.includes('need')) {
+    clarity = 4;
+  }
+  
+  // Calculate testability score (based on AC quality)
+  const actionVerbs = /^(user can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable)/i;
+  const testableCount = story.acceptance_criteria?.filter(ac => actionVerbs.test(ac.trim())).length || 0;
+  const testability = story.acceptance_criteria?.length ? Math.min(5, 2 + Math.round((testableCount / story.acceptance_criteria.length) * 3)) : 2;
+  
+  // Calculate completeness score (based on AC count)
+  const acCount = story.acceptance_criteria?.length || 0;
+  let completeness = 3;
+  if (acCount >= 5) completeness = 5;
+  else if (acCount >= 3) completeness = 4;
+  else if (acCount >= 1) completeness = 2;
+  else completeness = 1;
+  
+  // Scope score (based on title/description length balance)
+  const titleLen = story.title?.length || 0;
+  const descLen = story.description?.length || 0;
+  let scope = 4;
+  if (titleLen < 10 || titleLen > 100) scope = 3;
+  if (descLen < 30) scope = 3;
+  if (descLen > 500) {
+    scope = 3;
+    flags.push("broad_requirements");
+  }
+  
+  // Consistency score (all ACs should relate to description)
+  const consistency = dorResult.passed ? 4 : 3;
+  
+  const overall = Math.round(((clarity + testability + completeness + scope + consistency) / 5) * 10) / 10;
+  const needs_review = overall < 4 || testability < 3 || completeness < 3 || !dorResult.passed;
+  
+  // Add flags based on issues
+  if (testability < 3) flags.push("unclear_acceptance_criteria");
+  if (completeness < 3) flags.push("missing_edge_cases");
+  if (!dorResult.passed) flags.push("dor_failed");
+  
+  return {
+    overall,
+    needs_review,
+    dimensions: { clarity, testability, completeness, scope, consistency },
+    flags
+  };
+}
+
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   console.log(`[sb-run] requestId=${requestId}`);
@@ -128,16 +503,12 @@ serve(async (req) => {
         ? project_settings.customPrompt
         : "";
 
-    // Default models based on run_mode (using cheapest options for testing)
+    // Default models based on run_mode (using cheapest options)
     const DEFAULT_SINGLE_MODEL = "openai:gpt-5-nano";
     const DEFAULT_COMPARE_MODELS = [
       "openai:gpt-5-nano",
       "google:gemini-2.5-flash-lite",
     ];
-
-    // Fallback models if primary is unavailable
-    const FALLBACK_OPENAI = "openai:gpt-4o-mini";
-    const FALLBACK_GEMINI = "google:gemini-2.5-flash";
 
     const effectiveModels: string[] =
       models.length > 0
@@ -148,23 +519,12 @@ serve(async (req) => {
 
     const comparisonGroupId = run_mode === "compare" ? crypto.randomUUID() : null;
 
-    // FNV-1a hash for deterministic variation based on input
-    const fnv1aHash = (str: string): number => {
-      let hash = 2166136261;
-      for (let i = 0; i < str.length; i++) {
-        hash ^= str.charCodeAt(i);
-        hash = (hash * 16777619) >>> 0;
-      }
-      return hash;
-    };
-
     const rawInputStr = typeof raw_input === "string" ? raw_input : "";
     const rawInputTrimmed = rawInputStr.trim();
     const rawPreview = rawInputTrimmed.slice(0, 120);
-    const rawFingerprint = fnv1aHash(rawInputTrimmed || "(empty)").toString(16);
 
     console.log(
-      `[sb-run] requestId=${requestId} run_mode=${run_mode} models=${effectiveModels.join(",")} raw_len=${rawInputTrimmed.length} raw_fp=${rawFingerprint} raw_preview="${rawPreview.replace(/\n/g, " ")}"`,
+      `[sb-run] requestId=${requestId} run_mode=${run_mode} models=${effectiveModels.join(",")} raw_len=${rawInputTrimmed.length} raw_preview="${rawPreview.replace(/\n/g, " ")}"`,
     );
 
     // Create session first (required by foreign key constraint)
@@ -185,12 +545,11 @@ serve(async (req) => {
 
     const sessionId = session.id;
 
-    // Fetch active prompt version (same logic as UI), fallback to most recent
-    let promptTemplate = '[No prompt template available]';
-    let promptVersionName = 'unknown';
+    // Fetch active prompt version, fallback to most recent
+    let promptTemplate = 'Generate a user story based on the following input. Return JSON with title, description (in "As a [role], I want [goal], so that [benefit]" format), and acceptance_criteria (array of 3-7 testable criteria).';
+    let promptVersionName = 'default';
 
     try {
-      // First try to get active version
       const { data: activeVersion, error: activeError } = await supabase
         .from('sb_prompt_versions')
         .select('id, name, template')
@@ -202,7 +561,6 @@ serve(async (req) => {
         promptVersionName = activeVersion.name;
         console.log(`[sb-run] requestId=${requestId} using active prompt: ${promptVersionName}`);
       } else {
-        // Fallback: get most recent prompt version
         const { data: fallbackVersion, error: fallbackError } = await supabase
           .from('sb_prompt_versions')
           .select('id, name, template')
@@ -215,269 +573,166 @@ serve(async (req) => {
           promptVersionName = fallbackVersion.name;
           console.log(`[sb-run] requestId=${requestId} no active prompt, using fallback: ${promptVersionName}`);
         } else {
-          console.log(`[sb-run] requestId=${requestId} no prompt versions found, using placeholder`);
+          console.log(`[sb-run] requestId=${requestId} no prompt versions found, using default`);
         }
       }
     } catch (promptFetchError) {
       console.error(`[sb-run] requestId=${requestId} prompt fetch error (non-fatal):`, promptFetchError);
-      // Continue with placeholder - never throw
     }
 
     // Extract file content text from uploaded files (truncated)
     const extractedFileText = (project_settings?.fileContent || project_settings?.file_content || '').toString().slice(0, MAX_TEXT_LENGTH);
 
-    // Unique seed per request to ensure each invocation is fresh
-    const invocationSeed = `${requestId}-${Date.now()}`;
+    // Process each model (async loop for LLM calls)
+    const runs: RunResult[] = [];
 
-    const toTitleCase = (s: string) =>
-      s
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
+    for (let modelIndex = 0; modelIndex < effectiveModels.length; modelIndex++) {
+      const modelId = effectiveModels[modelIndex];
+      const runId = crypto.randomUUID();
+      
+      const isOpenAI = modelId.toLowerCase().includes("openai");
+      const isGemini = modelId.toLowerCase().includes("gemini") || modelId.toLowerCase().includes("google");
+      const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : `VARIANT_${modelIndex}`;
 
-    const extractTitleFromInput = (input: string): string => {
-      const firstLine =
-        input
-          .split("\n")
-          .map((l) => l.trim())
-          .find((l) => l.length > 0) ?? "";
+      // Build template inputs
+      const templateInputs: Record<string, string> = {
+        project_name: project_settings?.projectName || project_settings?.project_name || '[none]',
+        project_description: project_settings?.projectDescription || project_settings?.project_description || '[none]',
+        persona: project_settings?.persona || '[none]',
+        tone: project_settings?.tone || '[none]',
+        format: project_settings?.format || '[none]',
+        raw_input: rawInputTrimmed.slice(0, MAX_TEXT_LENGTH),
+        custom_prompt: customPrompt || '[none]',
+        file_content: extractedFileText || '[none]',
+        project_context: project_settings?.technicalContext || project_settings?.project_context || project_settings?.additionalContext || '[none]',
+      };
 
-      const cleaned = firstLine
-        .replace(/^[#*\-\d.\s]+/, "")
-        .replace(/[^a-zA-Z0-9\s]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      // Fill the prompt template
+      const filledSystemPrompt = fillPromptTemplate(promptTemplate, templateInputs);
+      
+      // Append JSON instruction to system prompt
+      const systemPromptWithJsonInstruction = `${filledSystemPrompt}
 
-      const words = cleaned.split(" ").filter(Boolean);
-      if (words.length >= 3) return toTitleCase(words.slice(0, 7).join(" "));
+IMPORTANT: You MUST respond with valid JSON only. The response must be a JSON object with exactly these fields:
+- "title": string (5-10 words, clear and concise)
+- "description": string (in "As a [role], I want [goal], so that [benefit]" format)
+- "acceptance_criteria": array of 3-7 strings (each being a testable acceptance criterion)
 
-      // Fallback: use a short topic phrase derived from the body
-      const bodyWords = input
-        .replace(/[^a-zA-Z0-9\s]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .split(" ")
-        .filter(Boolean);
-      if (bodyWords.length >= 3) return toTitleCase(bodyWords.slice(0, 7).join(" "));
-      return "User Story";
-    };
+Do not include any text outside the JSON object.`;
 
-    const extractAcceptanceCriteria = (input: string): string[] => {
-      // Prefer explicit bullet points, if present
-      const bullets = input
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => /^[-*]\s+/.test(l) || /^\d+\)\s+/.test(l) || /^\d+\.\s+/.test(l))
-        .map((l) => l.replace(/^([-*]|\d+\)|\d+\.)\s+/, "").trim())
-        .filter((l) => l.length > 0)
-        .slice(0, 7);
-
-      if (bullets.length >= 3) return bullets;
-
-      // Otherwise: derive generic-but-non-templated ACs tied to input fingerprint
-      const fp = fnv1aHash(input || "(empty)");
-      const base: string[] = [
-        "Story includes clear user goal and success outcome",
-        "Acceptance criteria are testable and unambiguous",
-        "Error cases and validation behavior are specified",
-        "Performance or latency expectations are stated when relevant",
-        "Sensitive data is handled securely and not exposed in errors",
-        "Out-of-scope items are explicitly noted",
+      // Build messages for LLM
+      const messages = [
+        { role: 'system', content: systemPromptWithJsonInstruction },
+        { role: 'user', content: rawInputTrimmed || '[empty input]' }
       ];
 
-      const rotated = base
-        .slice(fp % base.length)
-        .concat(base.slice(0, fp % base.length));
+      // Build actual payload sent to LLM
+      const actualLlmPayload = {
+        model: modelId.replace(":", "/"),
+        messages,
+        tools: [STORY_SCHEMA],
+        tool_choice: { type: "function", function: { name: "generate_user_story" } },
+        response_format: { type: "json_object" }
+      };
 
-      return rotated.slice(0, 5);
-    };
+      // Call LLM
+      const llmResult = await callLovableAI(modelId, messages, requestId);
+      
+      let finalStory: { title: string; description: string; acceptance_criteria: string[] };
+      let llmError: string | undefined;
+      let iterations = 1;
 
-    const baseTitle = extractTitleFromInput(rawInputTrimmed);
-    const baseDescription = rawInputTrimmed
-      ? rawInputTrimmed.replace(/\s+/g, " ").slice(0, 240)
-      : "";
-
-    // COMPARE MODE: Ensure two truly distinct runs with separate stories per model
-    const runs: RunResult[] = effectiveModels.map(
-      (modelId: string, modelIndex: number) => {
-        const runId = crypto.randomUUID();
-        const isOpenAI = modelId.toLowerCase().includes("openai");
-        const isGemini =
-          modelId.toLowerCase().includes("gemini") ||
-          modelId.toLowerCase().includes("google");
-
-        // Determine variant_id (kept for compare readability)
-        const variant_id = isOpenAI ? "OPENAI_A" : isGemini ? "GEMINI_B" : `VARIANT_${modelIndex}`;
-
-        // Check for model availability and apply fallbacks if needed
-        let actualModelId = modelId;
-        let modelFallbackUsed = false;
-
-        // Simulate model availability check (in real implementation, this would check actual availability)
-        const unavailableModels = new Set<string>();
-
-        if (unavailableModels.has(modelId)) {
-          if (isOpenAI) {
-            actualModelId = FALLBACK_OPENAI;
-            modelFallbackUsed = true;
-            console.log(
-              `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_OPENAI}`,
-            );
-          } else if (isGemini) {
-            actualModelId = FALLBACK_GEMINI;
-            modelFallbackUsed = true;
-            console.log(
-              `[sb-run] requestId=${requestId} model=${modelId} unavailable, falling back to ${FALLBACK_GEMINI}`,
-            );
+      if (llmResult.success && llmResult.data) {
+        // Validate the response
+        const validation = validateStory(llmResult.data);
+        
+        if (validation.valid && validation.normalized) {
+          finalStory = validation.normalized;
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} story valid`);
+        } else if (validation.normalized?.title && validation.normalized?.description) {
+          // Has title/description but needs AC repair
+          console.log(`[sb-run] requestId=${requestId} model=${modelId} needs AC repair: ${validation.issues.join(", ")}`);
+          iterations = 2;
+          
+          const repairResult = await repairAcceptanceCriteria(
+            { title: validation.normalized.title, description: validation.normalized.description },
+            modelId,
+            requestId
+          );
+          
+          if (repairResult.success && repairResult.criteria.length >= 3) {
+            finalStory = {
+              title: validation.normalized.title,
+              description: validation.normalized.description,
+              acceptance_criteria: repairResult.criteria
+            };
+          } else {
+            // Repair failed - return empty ACs and mark for review (FIX #1: no generic fallback)
+            llmError = `AC repair failed: ${repairResult.error || 'insufficient criteria'}`;
+            finalStory = {
+              title: validation.normalized.title,
+              description: validation.normalized.description,
+              acceptance_criteria: [] // Empty, not generic fallback
+            };
           }
+        } else {
+          // Complete failure - no usable output (FIX #1: no generic fallback)
+          llmError = `Invalid LLM response: ${validation.issues.join(", ")}`;
+          finalStory = {
+            title: '',
+            description: '',
+            acceptance_criteria: []
+          };
         }
-
-        // IMPORTANT: Seed includes model AND variant to guarantee distinct outputs per model
-        const inputSeed = `${rawInputTrimmed}||${customPrompt}||${modelId}||${variant_id}||${modelIndex}||${invocationSeed}`;
-        const hash = fnv1aHash(inputSeed);
-
-        // Derive scores from hash - each model gets different scores due to variant in seed
-        const clarityScore = 3 + (hash % 3); // 3-5
-        const testabilityScore = 2 + ((hash >> 4) % 4); // 2-5
-        const completenessScore = 3 + ((hash >> 8) % 3); // 3-5
-        const scopeScore = 3 + ((hash >> 12) % 3); // 3-5
-        const consistencyScore = 3 + ((hash >> 16) % 3); // 3-5
-
-        const overallRaw =
-          (clarityScore +
-            testabilityScore +
-            completenessScore +
-            scopeScore +
-            consistencyScore) /
-          5;
-        const overall = Math.round(overallRaw * 10) / 10;
-
-        const needsReview =
-          overall < 4 || testabilityScore < 3 || completenessScore < 3;
-
-        const possibleFlags = [
-          "ambiguous_scope",
-          "missing_edge_cases",
-          "unclear_acceptance_criteria",
-          "needs_refinement",
-          "broad_requirements",
-          "missing_error_handling",
-        ];
-        const flagCount = (hash >> 20) % 4; // 0-3
-        const flags: string[] = [];
-        for (let i = 0; i < flagCount; i++) {
-          const flagIndex = (hash >> (24 + i * 2)) % possibleFlags.length;
-          if (!flags.includes(possibleFlags[flagIndex])) {
-            flags.push(possibleFlags[flagIndex]);
-          }
-        }
-        if (modelFallbackUsed) flags.push("model_fallback_used");
-
-        // Generate model-specific title with variant marker for compare mode
-        const title =
-          run_mode === "compare" ? `${baseTitle} (${variant_id})` : baseTitle;
-
-        // Generate model-specific acceptance criteria (use hash to vary slightly)
-        const baseAC = extractAcceptanceCriteria(rawInputTrimmed);
-        // For compare mode, slightly vary acceptance criteria per model
-        const acceptanceCriteria = run_mode === "compare" && isGemini
-          ? baseAC.map((ac, i) => i === 0 ? `[Gemini] ${ac}` : ac)
-          : run_mode === "compare" && isOpenAI
-            ? baseAC.map((ac, i) => i === 0 ? `[OpenAI] ${ac}` : ac)
-            : baseAC;
-
-        // Generate model-specific description
-        const modelPrefix = isOpenAI ? "OpenAI analysis: " : isGemini ? "Gemini analysis: " : "";
-        const description =
-          baseDescription.length > 0
-            ? `${run_mode === "compare" ? modelPrefix : ""}As a user, I want ${baseDescription} so that I achieve the intended outcome.`
-            : `${run_mode === "compare" ? modelPrefix : ""}As a user, I want a clearly defined feature so that I can accomplish my goal.`;
-
-        const iterations = isOpenAI ? 1 : 1 + (hash % 3);
-        const dorPassed = overall >= 3.5;
-
-        // Build debug.llm_request from actual prompt template and inputs
-        const provider = actualModelId.split(':')[0] || 'unknown';
-
-        // Build template inputs from ACTUAL variables used in sb-run
-        const templateInputs: Record<string, string> = {
-          // Project settings fields (if provided)
-          project_name: project_settings?.projectName || project_settings?.project_name || '[none]',
-          project_description: project_settings?.projectDescription || project_settings?.project_description || '[none]',
-          persona: project_settings?.persona || '[none]',
-          tone: project_settings?.tone || '[none]',
-          format: project_settings?.format || '[none]',
-          // Actual run inputs
-          raw_input: rawInputTrimmed.slice(0, MAX_TEXT_LENGTH),
-          custom_prompt: customPrompt || '[none]',
-          file_content: extractedFileText || '[none]',
-          project_context: project_settings?.technicalContext || project_settings?.project_context || project_settings?.additionalContext || '[none]',
+      } else {
+        // LLM call failed (FIX #1: no generic fallback)
+        llmError = llmResult.error || "Unknown LLM error";
+        console.error(`[sb-run] requestId=${requestId} model=${modelId} LLM failed: ${llmError}`);
+        
+        finalStory = {
+          title: '',
+          description: '',
+          acceptance_criteria: []
         };
+      }
 
-        // Fill the actual prompt template with real inputs
-        const filledSystemPrompt = fillPromptTemplate(promptTemplate, templateInputs);
+      // FIX #2: Run actual DoR validation on the generated story
+      const dorResult = runDoRValidation(finalStory, llmError);
+      
+      // Calculate eval scores based on story quality
+      const evalResult = calculateEvalScores(finalStory, dorResult, llmError);
 
-        // Build messages: system (filled template) + user (raw_input)
-        const messages = [
-          { role: 'system', content: filledSystemPrompt },
-          { role: 'user', content: rawInputTrimmed.slice(0, MAX_TEXT_LENGTH) || '[empty input]' }
-        ];
+      // Build debug object with ACTUAL payload sent (redacted)
+      const debug = {
+        llm_request: {
+          provider: modelId.split(':')[0] || 'unknown',
+          model: modelId,
+          prompt_version: promptVersionName,
+          messages: redactSecrets(messages) as Array<{ role: string; content: string }>,
+          payload: redactSecrets(actualLlmPayload),
+        },
+        llm_error: llmError,
+      };
 
-        // Payload includes ONLY fields we actually set (no invented temp/max_tokens)
-        const llmPayload = {
-          model: actualModelId,
-          messages,
-        };
+      const result: RunResult = {
+        run_id: runId,
+        model_id: modelId,
+        final_story: finalStory,
+        dor: {
+          passed: dorResult.passed,
+          iterations,
+          fail_reasons: dorResult.fail_reasons,
+        },
+        eval: evalResult,
+        debug,
+      };
 
-        const debug = {
-          llm_request: {
-            provider,
-            model: actualModelId,
-            prompt_version: promptVersionName,
-            messages: redactSecrets(messages) as Array<{ role: string; content: string }>,
-            payload: redactSecrets(llmPayload),
-          },
-        };
+      console.log(
+        `[sb-run] requestId=${requestId} run_id=${runId.slice(0, 8)} model=${modelId} dor_passed=${dorResult.passed} overall=${evalResult.overall} needs_review=${evalResult.needs_review} title="${finalStory.title?.slice(0, 50) || '[empty]'}"`,
+      );
 
-        // Create a NEW story object for each run (never reuse)
-        const result: RunResult = {
-          run_id: runId,
-          model_id: actualModelId,
-          final_story: {
-            title,
-            description,
-            acceptance_criteria: acceptanceCriteria,
-          },
-          dor: {
-            passed: dorPassed,
-            iterations,
-            fail_reasons: dorPassed ? [] : ["Quality threshold not met"],
-          },
-          eval: {
-            overall,
-            needs_review: needsReview,
-            dimensions: {
-              clarity: clarityScore,
-              testability: testabilityScore,
-              completeness: completenessScore,
-              scope: scopeScore,
-              consistency: consistencyScore,
-            },
-            flags,
-          },
-          debug,
-        };
-
-        // Enhanced per-run logging with title hash for uniqueness confirmation
-        const titleHash = fnv1aHash(result.final_story.title).toString(16).slice(0, 8);
-        console.log(
-          `[sb-run] requestId=${requestId} run_id=${runId.slice(0, 8)} model_id=${actualModelId} variant=${variant_id} overall=${result.eval.overall} title_hash=${titleHash} title="${result.final_story.title.slice(0, 50)}"`,
-        );
-
-        return result;
-      },
-    );
+      runs.push(result);
+    }
 
     const storyRows = runs.map((r) => ({
       session_id: sessionId,

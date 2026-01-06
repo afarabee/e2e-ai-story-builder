@@ -1,13 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Edit, Eye } from "lucide-react";
 import { RunEvaluationCard } from "./RunEvaluationCard";
+import { DoRStatusCard } from "./DoRStatusCard";
+import { cn } from "@/lib/utils";
 
 interface EvalResult {
   overall: number;
   needs_review: boolean;
   dimensions: Record<string, number>;
   flags: string[];
+  explanations?: Record<string, string[]>;
+  unclear_ac_indices?: number[];
 }
 
 interface FinalStory {
@@ -45,7 +50,7 @@ interface ComparePanelProps {
 }
 
 export function ComparePanel({ run, onEditVersion, onViewInput }: ComparePanelProps) {
-  const { model_id, story_id, final_story, eval: evalResult } = run;
+  const { model_id, story_id, final_story, dor, eval: evalResult } = run;
 
   return (
     <Card className="flex-1 min-w-0">
@@ -77,16 +82,31 @@ export function ComparePanel({ run, onEditVersion, onViewInput }: ComparePanelPr
               Acceptance Criteria
             </h4>
             <ul className="space-y-1">
-              {final_story.acceptance_criteria.map((criterion, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0 mt-0.5" />
-                  <span>{criterion}</span>
-                </li>
-              ))}
+              {final_story.acceptance_criteria.map((criterion, idx) => {
+                const isUnclear = evalResult.unclear_ac_indices?.includes(idx);
+                return (
+                  <li key={idx} className="flex items-start gap-2 text-sm">
+                    <CheckCircle className={cn(
+                      "h-4 w-4 flex-shrink-0 mt-0.5",
+                      isUnclear ? "text-amber-500" : "text-status-ready"
+                    )} />
+                    <span className="flex-1">{criterion}</span>
+                    {isUnclear && (
+                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700 flex-shrink-0">
+                        Unclear
+                      </Badge>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
 
+        {/* DoR Status Card */}
+        <DoRStatusCard dor={dor} />
+
+        {/* Evaluation Card */}
         <RunEvaluationCard evalResult={evalResult} />
 
         {/* Action buttons */}

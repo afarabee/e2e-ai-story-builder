@@ -137,9 +137,7 @@ async function callLovableAI(
     model: lovableModelId,
     messages,
     tools: [STORY_SCHEMA],
-    tool_choice: { type: "function", function: { name: "generate_user_story" } },
-    // Also add response_format hint for models that support it
-    response_format: { type: "json_object" }
+    tool_choice: { type: "function", function: { name: "generate_user_story" } }
   };
 
   try {

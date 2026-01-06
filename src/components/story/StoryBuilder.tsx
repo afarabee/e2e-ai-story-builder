@@ -45,6 +45,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateMockChatResponse } from "@/lib/mockChatService";
 import { ComparePanel } from "./ComparePanel";
 import { RunEvaluationCard } from "./RunEvaluationCard";
+import { RunInputModal } from "./RunInputModal";
 
 // Type for backend run response
 interface RunResponse {
@@ -66,6 +67,15 @@ interface RunResponse {
     needs_review: boolean;
     dimensions: Record<string, number>;
     flags: string[];
+  };
+  debug?: {
+    llm_request: {
+      provider: string;
+      model: string;
+      prompt_version: string;
+      messages: Array<{ role: string; content: string }>;
+      payload: unknown;
+    };
   };
 }
 
@@ -188,6 +198,10 @@ export function StoryBuilder({
   // State for editing a specific version from compare view
   const [isEditingFromCompare, setIsEditingFromCompare] = useState(false);
   
+  // Run input modal state
+  const [runInputModalOpen, setRunInputModalOpen] = useState(false);
+  const [selectedRunForInput, setSelectedRunForInput] = useState<RunResponse | null>(null);
+
   // Auto-save state
   const [lastAutoSaveContent, setLastAutoSaveContent] = useState<string>('');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -798,6 +812,12 @@ export function StoryBuilder({
     setActiveModelId(null);
   };
 
+  // View run input debug info
+  const handleViewRunInput = (run: RunResponse) => {
+    setSelectedRunForInput(run);
+    setRunInputModalOpen(true);
+  };
+
   const restartStory = () => {
     if (!savedOriginalStory) return;
     
@@ -1347,6 +1367,7 @@ export function StoryBuilder({
                 key={run.run_id} 
                 run={run} 
                 onEditVersion={handleEditVersion}
+                onViewInput={handleViewRunInput}
               />
             ))}
           </div>
@@ -1671,6 +1692,19 @@ export function StoryBuilder({
 
           {runs[0]?.eval && <RunEvaluationCard evalResult={runs[0].eval} />}
 
+          {/* View Run Input Button - Always shown */}
+          {runs[0] && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => handleViewRunInput(runs[0])}
+              className="w-fit gap-2"
+            >
+              <Eye className="h-4 w-4" />
+              View Run Input
+            </Button>
+          )}
+
           {/* Developer Notes - Always Visible */}
           <Collapsible open={devNotesOpen} onOpenChange={setDevNotesOpen}>
             <Card>
@@ -1782,6 +1816,14 @@ export function StoryBuilder({
         </div>
         </div>
       )}
+
+      {/* Run Input Modal */}
+      <RunInputModal 
+        open={runInputModalOpen}
+        onOpenChange={setRunInputModalOpen}
+        modelId={selectedRunForInput?.model_id ?? ''}
+        debug={selectedRunForInput?.debug}
+      />
       </div>
     </>
   );

@@ -27,7 +27,67 @@ type RunResult = {
     dimensions: Record<string, number>;
     flags: string[];
   };
+  debug?: {
+    llm_request: {
+      provider: string;
+      model: string;
+      prompt_version: string;
+      messages: Array<{ role: string; content: string }>;
+      payload: unknown;
+    };
+  };
 };
+
+// Sensitive keys to redact (case-insensitive) - expanded list
+const SENSITIVE_KEYS = /api[_-]?key|token|authorization|secret|password|cookie|session|refresh|jwt|bearer|private|signature/i;
+const MAX_TEXT_LENGTH = 10000;
+
+function redactSecrets(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  
+  // Truncate long strings
+  if (typeof obj === 'string') {
+    return obj.length > MAX_TEXT_LENGTH 
+      ? obj.slice(0, MAX_TEXT_LENGTH) + '...[truncated]' 
+      : obj;
+  }
+  
+  // Recurse arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactSecrets(item));
+  }
+  
+  // Recurse objects, redact sensitive keys, DROP headers entirely
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      // Drop headers entirely
+      if (key.toLowerCase() === 'headers') continue;
+      
+      // Redact sensitive keys
+      if (SENSITIVE_KEYS.test(key)) {
+        result[key] = '[REDACTED]';
+      } else {
+        result[key] = redactSecrets(value);
+      }
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+// Fill template placeholders with whitespace tolerance: {{ key }} or {{key}}
+function fillPromptTemplate(template: string, inputs: Record<string, string>): string {
+  let filled = template;
+  for (const [key, value] of Object.entries(inputs)) {
+    // Escape regex special chars in key, allow optional whitespace around key
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const placeholder = new RegExp(`\\{\\{\\s*${escapedKey}\\s*\\}\\}`, 'g');
+    filled = filled.replace(placeholder, value || '[none]');
+  }
+  return filled;
+}
 
 serve(async (req) => {
   const requestId = crypto.randomUUID();
@@ -124,6 +184,47 @@ serve(async (req) => {
     }
 
     const sessionId = session.id;
+
+    // Fetch active prompt version (same logic as UI), fallback to most recent
+    let promptTemplate = '[No prompt template available]';
+    let promptVersionName = 'unknown';
+
+    try {
+      // First try to get active version
+      const { data: activeVersion, error: activeError } = await supabase
+        .from('sb_prompt_versions')
+        .select('id, name, template')
+        .eq('status', 'active')
+        .single();
+
+      if (activeVersion && !activeError) {
+        promptTemplate = activeVersion.template;
+        promptVersionName = activeVersion.name;
+        console.log(`[sb-run] requestId=${requestId} using active prompt: ${promptVersionName}`);
+      } else {
+        // Fallback: get most recent prompt version
+        const { data: fallbackVersion, error: fallbackError } = await supabase
+          .from('sb_prompt_versions')
+          .select('id, name, template')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (fallbackVersion && !fallbackError) {
+          promptTemplate = fallbackVersion.template;
+          promptVersionName = fallbackVersion.name;
+          console.log(`[sb-run] requestId=${requestId} no active prompt, using fallback: ${promptVersionName}`);
+        } else {
+          console.log(`[sb-run] requestId=${requestId} no prompt versions found, using placeholder`);
+        }
+      }
+    } catch (promptFetchError) {
+      console.error(`[sb-run] requestId=${requestId} prompt fetch error (non-fatal):`, promptFetchError);
+      // Continue with placeholder - never throw
+    }
+
+    // Extract file content text from uploaded files (truncated)
+    const extractedFileText = (project_settings?.fileContent || project_settings?.file_content || '').toString().slice(0, MAX_TEXT_LENGTH);
 
     // Unique seed per request to ensure each invocation is fresh
     const invocationSeed = `${requestId}-${Date.now()}`;
@@ -296,6 +397,49 @@ serve(async (req) => {
         const iterations = isOpenAI ? 1 : 1 + (hash % 3);
         const dorPassed = overall >= 3.5;
 
+        // Build debug.llm_request from actual prompt template and inputs
+        const provider = actualModelId.split(':')[0] || 'unknown';
+
+        // Build template inputs from ACTUAL variables used in sb-run
+        const templateInputs: Record<string, string> = {
+          // Project settings fields (if provided)
+          project_name: project_settings?.projectName || project_settings?.project_name || '[none]',
+          project_description: project_settings?.projectDescription || project_settings?.project_description || '[none]',
+          persona: project_settings?.persona || '[none]',
+          tone: project_settings?.tone || '[none]',
+          format: project_settings?.format || '[none]',
+          // Actual run inputs
+          raw_input: rawInputTrimmed.slice(0, MAX_TEXT_LENGTH),
+          custom_prompt: customPrompt || '[none]',
+          file_content: extractedFileText || '[none]',
+          project_context: project_settings?.technicalContext || project_settings?.project_context || project_settings?.additionalContext || '[none]',
+        };
+
+        // Fill the actual prompt template with real inputs
+        const filledSystemPrompt = fillPromptTemplate(promptTemplate, templateInputs);
+
+        // Build messages: system (filled template) + user (raw_input)
+        const messages = [
+          { role: 'system', content: filledSystemPrompt },
+          { role: 'user', content: rawInputTrimmed.slice(0, MAX_TEXT_LENGTH) || '[empty input]' }
+        ];
+
+        // Payload includes ONLY fields we actually set (no invented temp/max_tokens)
+        const llmPayload = {
+          model: actualModelId,
+          messages,
+        };
+
+        const debug = {
+          llm_request: {
+            provider,
+            model: actualModelId,
+            prompt_version: promptVersionName,
+            messages: redactSecrets(messages) as Array<{ role: string; content: string }>,
+            payload: redactSecrets(llmPayload),
+          },
+        };
+
         // Create a NEW story object for each run (never reuse)
         const result: RunResult = {
           run_id: runId,
@@ -322,6 +466,7 @@ serve(async (req) => {
             },
             flags,
           },
+          debug,
         };
 
         // Enhanced per-run logging with title hash for uniqueness confirmation
@@ -346,6 +491,7 @@ serve(async (req) => {
         project_settings,
         dor: r.dor,
         eval: r.eval,
+        debug: r.debug,
         comparison_group_id: comparisonGroupId,
         generated_at: new Date().toISOString(),
       },

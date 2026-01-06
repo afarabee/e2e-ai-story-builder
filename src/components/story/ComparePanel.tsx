@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Edit } from "lucide-react";
+import { CheckCircle, Edit, Eye } from "lucide-react";
 import { RunEvaluationCard } from "./RunEvaluationCard";
 
 interface EvalResult {
@@ -27,14 +27,24 @@ interface Run {
     fail_reasons: string[];
   };
   eval: EvalResult;
+  debug?: {
+    llm_request: {
+      provider: string;
+      model: string;
+      prompt_version: string;
+      messages: Array<{ role: string; content: string }>;
+      payload: unknown;
+    };
+  };
 }
 
 interface ComparePanelProps {
   run: Run;
   onEditVersion?: (run: Run) => void;
+  onViewInput?: (run: Run) => void;
 }
 
-export function ComparePanel({ run, onEditVersion }: ComparePanelProps) {
+export function ComparePanel({ run, onEditVersion, onViewInput }: ComparePanelProps) {
   const { model_id, story_id, final_story, eval: evalResult } = run;
 
   return (
@@ -79,16 +89,33 @@ export function ComparePanel({ run, onEditVersion }: ComparePanelProps) {
 
         <RunEvaluationCard evalResult={evalResult} />
 
-        {/* Edit this version button */}
-        {onEditVersion && (
-          <Button 
-            onClick={() => onEditVersion(run)}
-            className="w-full gap-2"
-          >
-            <Edit className="h-4 w-4" />
-            Edit this version
-          </Button>
-        )}
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          {/* View Run Input - Always shown */}
+          {onViewInput && (
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => onViewInput(run)}
+              className="flex-1 gap-2"
+            >
+              <Eye className="h-4 w-4" />
+              View Input
+            </Button>
+          )}
+          
+          {/* Edit this version button */}
+          {onEditVersion && (
+            <Button 
+              size="sm"
+              onClick={() => onEditVersion(run)}
+              className="flex-1 gap-2"
+            >
+              <Edit className="h-4 w-4" />
+              Edit this version
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

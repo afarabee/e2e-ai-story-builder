@@ -396,17 +396,22 @@ function calculateEvalScores(story: { title: string; description: string; accept
   needs_review: boolean;
   dimensions: Record<string, number>;
   flags: string[];
+  explanations?: Record<string, string[]>;
+  unclear_ac_indices?: number[];
 } {
   const flags: string[] = [];
+  const explanations: Record<string, string[]> = {};
   
   // If LLM errored, set low scores and flag
   if (llmError) {
     flags.push("llm_error");
+    explanations["llm_error"] = [llmError];
     return {
       overall: 1.0,
       needs_review: true,
       dimensions: { clarity: 1, testability: 1, completeness: 1, scope: 1, consistency: 1 },
-      flags
+      flags,
+      explanations
     };
   }
   
@@ -423,6 +428,14 @@ function calculateEvalScores(story: { title: string; description: string; accept
   const actionVerbs = /^(user can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable)/i;
   const testableCount = story.acceptance_criteria?.filter(ac => actionVerbs.test(ac.trim())).length || 0;
   const testability = story.acceptance_criteria?.length ? Math.min(5, 2 + Math.round((testableCount / story.acceptance_criteria.length) * 3)) : 2;
+  
+  // Track which ACs fail the actionVerbs test (same predicate used for testability)
+  const unclearAcIndices: number[] = [];
+  story.acceptance_criteria?.forEach((ac, idx) => {
+    if (!actionVerbs.test(ac.trim())) {
+      unclearAcIndices.push(idx);
+    }
+  });
   
   // Calculate completeness score (based on AC count)
   const acCount = story.acceptance_criteria?.length || 0;
@@ -450,16 +463,42 @@ function calculateEvalScores(story: { title: string; description: string; accept
   const needs_review = overall < 4 || testability < 3 || completeness < 3 || !dorResult.passed;
   
   // Add flags based on issues
-  if (testability < 3) flags.push("unclear_acceptance_criteria");
+  if (testability < 3) {
+    flags.push("unclear_acceptance_criteria");
+    explanations["unclear_acceptance_criteria"] = ["Some acceptance criteria lack testable action verbs (e.g., 'User can', 'System', 'Given/When/Then')"];
+  }
   if (completeness < 3) flags.push("missing_edge_cases");
-  if (!dorResult.passed) flags.push("dor_failed");
+  if (!dorResult.passed) {
+    flags.push("dor_failed");
+    explanations["dor_failed"] = dorResult.fail_reasons;
+  }
   
-  return {
+  // Build result with optional fields
+  const result: {
+    overall: number;
+    needs_review: boolean;
+    dimensions: Record<string, number>;
+    flags: string[];
+    explanations?: Record<string, string[]>;
+    unclear_ac_indices?: number[];
+  } = {
     overall,
     needs_review,
     dimensions: { clarity, testability, completeness, scope, consistency },
     flags
   };
+  
+  // Only include explanations if we have any
+  if (Object.keys(explanations).length > 0) {
+    result.explanations = explanations;
+  }
+  
+  // Only include unclear_ac_indices if the flag is set AND we have indices
+  if (flags.includes("unclear_acceptance_criteria") && unclearAcIndices.length > 0) {
+    result.unclear_ac_indices = unclearAcIndices;
+  }
+  
+  return result;
 }
 
 serve(async (req) => {

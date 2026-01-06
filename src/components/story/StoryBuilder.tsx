@@ -46,6 +46,7 @@ import { generateMockChatResponse } from "@/lib/mockChatService";
 import { ComparePanel } from "./ComparePanel";
 import { RunEvaluationCard } from "./RunEvaluationCard";
 import { RunInputModal } from "./RunInputModal";
+import { DoRStatusCard } from "./DoRStatusCard";
 
 // Type for backend run response
 interface RunResponse {
@@ -67,6 +68,8 @@ interface RunResponse {
     needs_review: boolean;
     dimensions: Record<string, number>;
     flags: string[];
+    explanations?: Record<string, string[]>;
+    unclear_ac_indices?: number[];
   };
   debug?: {
     llm_request: {
@@ -1690,6 +1693,7 @@ export function StoryBuilder({
             </CardContent>
           </Card>
 
+          {runs[0]?.dor && <DoRStatusCard dor={runs[0].dor} />}
           {runs[0]?.eval && <RunEvaluationCard evalResult={runs[0].eval} />}
 
           {/* View Run Input Button - Always shown */}

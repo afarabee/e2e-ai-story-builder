@@ -398,6 +398,20 @@ function calculateEvalScores(story: { title: string; description: string; accept
   flags: string[];
   explanations?: Record<string, string[]>;
   unclear_ac_indices?: number[];
+  testability_debug?: {
+    heuristicVersion: string;
+    totalAC: number;
+    testableCount: number;
+    testableRatio: number;
+    threshold: number;
+    passed: boolean;
+    acDetails: Array<{
+      acIndex: number;
+      acText: string;
+      matchedPatterns: string[];
+      isTestable: boolean;
+    }>;
+  };
 } {
   const flags: string[] = [];
   const explanations: Record<string, string[]> = {};
@@ -425,56 +439,88 @@ function calculateEvalScores(story: { title: string; description: string; accept
   }
   
   // Calculate testability score (based on AC quality)
-  // isTestableAC: Determines if an AC is testable (observable + verifiable, not just prefix-matched)
-  const isTestableAC = (ac: string): boolean => {
-    const text = ac.trim();
-    const lower = text.toLowerCase();
-    
-    // Pattern 1: Action verb prefixes (expanded)
-    const actionVerbPrefix = /^(user(s)? can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable|must|should|shall|the user|the system|a user)/i;
-    if (actionVerbPrefix.test(text)) return true;
-    
-    // Pattern 2: Conditional/temporal phrasing (observable outcomes)
-    const conditionalTemporal = /^(if|invalid|valid|on|upon|after|before|during|while|once|unless|following|prior to)\b/i;
-    if (conditionalTemporal.test(text)) return true;
-    
-    // Pattern 3: Action-oriented verbs at start (e.g., "Sign in...", "Logout clears...")
-    const actionVerbsAnywhere = /^[A-Z][a-z]+(\s+[a-z]+)?\s+(with|in|out|up|on|off|to|from|into|for|at|by|using|via|through|requests?|actions?|attempts?|clears?|loads?|shows?|displays?|returns?|triggers?|creates?|updates?|deletes?|sends?|receives?|stores?|retrieves?|validates?|succeeds?|fails?|completes?)\b/i;
-    if (actionVerbsAnywhere.test(text)) return true;
-    
-    // Pattern 4: Security constraints (verifiable configs)
-    const securityTerms = /\b(https|http-only|httponly|samesite|secure cookie|encrypted|hashed|authenticated|authorized|ssl|tls|csrf|xss|sanitized|escaped|token|jwt|oauth|session)\b/i;
-    if (securityTerms.test(lower)) return true;
-    
-    // Pattern 5: Performance bounds (measurable)
-    const performancePattern = /\b(within|under|less than|at most|maximum|max|at least|minimum|min|<|>|≤|≥)\s*\d+\s*(ms|milliseconds?|seconds?|s|minutes?|m|%|percent)?\b/i;
-    if (performancePattern.test(lower)) return true;
-    
-    // Pattern 6: Passive-but-verifiable statements
-    const passiveVerifiable = /\b(is|are|was|were|been|being)\s+(transmitted|stored|logged|displayed|shown|hidden|validated|checked|verified|saved|deleted|created|updated|sent|received|processed|encrypted|hashed|cached|loaded|rendered|accessible|cleared|returned|redirected|maintained|preserved|retained)\b/i;
-    if (passiveVerifiable.test(lower)) return true;
-    
-    // Pattern 7: State/outcome verbs (observable states)
-    const stateOutcomeVerbs = /\b(remains|stays|becomes|appears|disappears|shows|hides|contains|includes|excludes|matches|equals|returns|responds|redirects|navigates|transitions|loads|clears|resets|expires|succeeds|fails|completes|triggers|activates|deactivates)\b/i;
-    if (stateOutcomeVerbs.test(lower)) return true;
-    
-    // Pattern 8: Negation patterns (testable absence)
-    const negationPattern = /\b(do not|does not|doesn't|will not|won't|never|cannot|can't|prevent|block|deny|reject|forbid)\b/i;
-    if (negationPattern.test(lower)) return true;
-    
-    return false;
+  // Version stamp for debugging which heuristic is running
+  const TESTABILITY_HEURISTIC_VERSION = "2026-01-07a";
+  
+  // Pattern definitions with IDs for debug logging
+  const testabilityPatterns = {
+    actionVerbPrefix: /^(user(s)? can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable|must|should|shall|the user|the system|a user)/i,
+    conditionalTemporal: /^(if|invalid|valid|on|upon|after|before|during|while|once|unless|following|prior to)\b/i,
+    actionVerbsAnywhere: /^[A-Z][a-z]+(\s+[a-z]+)?\s+(with|in|out|up|on|off|to|from|into|for|at|by|using|via|through|requests?|actions?|attempts?|clears?|loads?|shows?|displays?|returns?|triggers?|creates?|updates?|deletes?|sends?|receives?|stores?|retrieves?|validates?|succeeds?|fails?|completes?)\b/i,
+    securityTerms: /\b(https|http-only|httponly|samesite|secure cookie|encrypted|hashed|authenticated|authorized|ssl|tls|csrf|xss|sanitized|escaped|token|jwt|oauth|session)\b/i,
+    performanceBounds: /\b(within|under|less than|at most|maximum|max|at least|minimum|min|<|>|≤|≥)\s*\d+\s*(ms|milliseconds?|seconds?|s|minutes?|m|%|percent)?\b/i,
+    passiveVerifiable: /\b(is|are|was|were|been|being)\s+(transmitted|stored|logged|displayed|shown|hidden|validated|checked|verified|saved|deleted|created|updated|sent|received|processed|encrypted|hashed|cached|loaded|rendered|accessible|cleared|returned|redirected|maintained|preserved|retained)\b/i,
+    stateOutcomeVerbs: /\b(remains|stays|becomes|appears|disappears|shows|hides|contains|includes|excludes|matches|equals|returns|responds|redirects|navigates|transitions|loads|clears|resets|expires|succeeds|fails|completes|triggers|activates|deactivates)\b/i,
+    negationPattern: /\b(do not|does not|doesn't|will not|won't|never|cannot|can't|prevent|block|deny|reject|forbid)\b/i,
   };
   
-  const testableCount = story.acceptance_criteria?.filter(ac => isTestableAC(ac)).length || 0;
-  const testability = story.acceptance_criteria?.length ? Math.min(5, 2 + Math.round((testableCount / story.acceptance_criteria.length) * 3)) : 2;
+  // isTestableAC: Determines if an AC is testable and returns matched patterns for debugging
+  const analyzeTestability = (ac: string): { isTestable: boolean; matchedPatterns: string[] } => {
+    const text = ac.trim();
+    const lower = text.toLowerCase();
+    const matchedPatterns: string[] = [];
+    
+    if (testabilityPatterns.actionVerbPrefix.test(text)) matchedPatterns.push("actionVerbPrefix");
+    if (testabilityPatterns.conditionalTemporal.test(text)) matchedPatterns.push("conditionalTemporal");
+    if (testabilityPatterns.actionVerbsAnywhere.test(text)) matchedPatterns.push("actionVerbsAnywhere");
+    if (testabilityPatterns.securityTerms.test(lower)) matchedPatterns.push("securityTerms");
+    if (testabilityPatterns.performanceBounds.test(lower)) matchedPatterns.push("performanceBounds");
+    if (testabilityPatterns.passiveVerifiable.test(lower)) matchedPatterns.push("passiveVerifiable");
+    if (testabilityPatterns.stateOutcomeVerbs.test(lower)) matchedPatterns.push("stateOutcomeVerbs");
+    if (testabilityPatterns.negationPattern.test(lower)) matchedPatterns.push("negationPattern");
+    
+    return {
+      isTestable: matchedPatterns.length > 0,
+      matchedPatterns,
+    };
+  };
   
-  // Track which ACs fail the testability check
+  // Analyze each AC and build debug log
+  const acAnalysis: Array<{
+    acIndex: number;
+    acText: string;
+    matchedPatterns: string[];
+    isTestable: boolean;
+  }> = [];
+  
   const unclearAcIndices: number[] = [];
+  let testableCount = 0;
+  
   story.acceptance_criteria?.forEach((ac, idx) => {
-    if (!isTestableAC(ac)) {
+    const analysis = analyzeTestability(ac);
+    acAnalysis.push({
+      acIndex: idx,
+      acText: ac.slice(0, 120) + (ac.length > 120 ? "..." : ""),
+      matchedPatterns: analysis.matchedPatterns,
+      isTestable: analysis.isTestable,
+    });
+    
+    if (analysis.isTestable) {
+      testableCount++;
+    } else {
       unclearAcIndices.push(idx);
     }
   });
+  
+  const totalAC = story.acceptance_criteria?.length || 0;
+  const testableRatio = totalAC > 0 ? testableCount / totalAC : 0;
+  const testabilityThreshold = 0.5; // At least half must be testable for score >= 3
+  const testabilityPassed = testableRatio >= testabilityThreshold;
+  
+  // Build testability debug summary
+  const testabilityDebug = {
+    heuristicVersion: TESTABILITY_HEURISTIC_VERSION,
+    totalAC,
+    testableCount,
+    testableRatio: Math.round(testableRatio * 100) / 100,
+    threshold: testabilityThreshold,
+    passed: testabilityPassed,
+    acDetails: acAnalysis,
+  };
+  
+  console.log(`[sb-run] testability: version=${TESTABILITY_HEURISTIC_VERSION} total=${totalAC} testable=${testableCount} ratio=${testableRatio.toFixed(2)} passed=${testabilityPassed}`);
+  
+  const testability = totalAC > 0 ? Math.min(5, 2 + Math.round(testableRatio * 3)) : 2;
   
   // Calculate completeness score (based on AC count)
   const acCount = story.acceptance_criteria?.length || 0;
@@ -520,6 +566,7 @@ function calculateEvalScores(story: { title: string; description: string; accept
     flags: string[];
     explanations?: Record<string, string[]>;
     unclear_ac_indices?: number[];
+    testability_debug?: typeof testabilityDebug;
   } = {
     overall,
     needs_review,
@@ -536,6 +583,9 @@ function calculateEvalScores(story: { title: string; description: string; accept
   if (flags.includes("unclear_acceptance_criteria") && unclearAcIndices.length > 0) {
     result.unclear_ac_indices = unclearAcIndices;
   }
+  
+  // Always include testability debug for runtime proof
+  result.testability_debug = testabilityDebug;
   
   return result;
 }
@@ -778,7 +828,7 @@ Do not include any text outside the JSON object.`;
       // Calculate eval scores based on story quality
       const evalResult = calculateEvalScores(finalStory, dorResult, llmError);
 
-      // Build debug object with ACTUAL payload sent (redacted)
+      // Build debug object with ACTUAL payload sent (redacted) + testability debug
       const debug = {
         llm_request: {
           provider: modelId.split(':')[0] || 'unknown',
@@ -788,6 +838,7 @@ Do not include any text outside the JSON object.`;
           payload: redactSecrets(actualLlmPayload),
         },
         llm_error: llmError,
+        testability: evalResult.testability_debug,
       };
 
       const result: RunResult = {

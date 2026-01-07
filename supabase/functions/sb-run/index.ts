@@ -425,14 +425,53 @@ function calculateEvalScores(story: { title: string; description: string; accept
   }
   
   // Calculate testability score (based on AC quality)
-  const actionVerbs = /^(user can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable)/i;
-  const testableCount = story.acceptance_criteria?.filter(ac => actionVerbs.test(ac.trim())).length || 0;
+  // isTestableAC: Determines if an AC is testable (observable + verifiable, not just prefix-matched)
+  const isTestableAC = (ac: string): boolean => {
+    const text = ac.trim();
+    const lower = text.toLowerCase();
+    
+    // Pattern 1: Action verb prefixes (expanded)
+    const actionVerbPrefix = /^(user(s)? can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable|must|should|shall|the user|the system|a user)/i;
+    if (actionVerbPrefix.test(text)) return true;
+    
+    // Pattern 2: Conditional/temporal phrasing (observable outcomes)
+    const conditionalTemporal = /^(if|invalid|valid|on|upon|after|before|during|while|once|unless|following|prior to)\b/i;
+    if (conditionalTemporal.test(text)) return true;
+    
+    // Pattern 3: Action-oriented verbs at start (e.g., "Sign in...", "Logout clears...")
+    const actionVerbsAnywhere = /^[A-Z][a-z]+(\s+[a-z]+)?\s+(with|in|out|up|on|off|to|from|into|for|at|by|using|via|through|requests?|actions?|attempts?|clears?|loads?|shows?|displays?|returns?|triggers?|creates?|updates?|deletes?|sends?|receives?|stores?|retrieves?|validates?|succeeds?|fails?|completes?)\b/i;
+    if (actionVerbsAnywhere.test(text)) return true;
+    
+    // Pattern 4: Security constraints (verifiable configs)
+    const securityTerms = /\b(https|http-only|httponly|samesite|secure cookie|encrypted|hashed|authenticated|authorized|ssl|tls|csrf|xss|sanitized|escaped|token|jwt|oauth|session)\b/i;
+    if (securityTerms.test(lower)) return true;
+    
+    // Pattern 5: Performance bounds (measurable)
+    const performancePattern = /\b(within|under|less than|at most|maximum|max|at least|minimum|min|<|>|≤|≥)\s*\d+\s*(ms|milliseconds?|seconds?|s|minutes?|m|%|percent)?\b/i;
+    if (performancePattern.test(lower)) return true;
+    
+    // Pattern 6: Passive-but-verifiable statements
+    const passiveVerifiable = /\b(is|are|was|were|been|being)\s+(transmitted|stored|logged|displayed|shown|hidden|validated|checked|verified|saved|deleted|created|updated|sent|received|processed|encrypted|hashed|cached|loaded|rendered|accessible|cleared|returned|redirected|maintained|preserved|retained)\b/i;
+    if (passiveVerifiable.test(lower)) return true;
+    
+    // Pattern 7: State/outcome verbs (observable states)
+    const stateOutcomeVerbs = /\b(remains|stays|becomes|appears|disappears|shows|hides|contains|includes|excludes|matches|equals|returns|responds|redirects|navigates|transitions|loads|clears|resets|expires|succeeds|fails|completes|triggers|activates|deactivates)\b/i;
+    if (stateOutcomeVerbs.test(lower)) return true;
+    
+    // Pattern 8: Negation patterns (testable absence)
+    const negationPattern = /\b(do not|does not|doesn't|will not|won't|never|cannot|can't|prevent|block|deny|reject|forbid)\b/i;
+    if (negationPattern.test(lower)) return true;
+    
+    return false;
+  };
+  
+  const testableCount = story.acceptance_criteria?.filter(ac => isTestableAC(ac)).length || 0;
   const testability = story.acceptance_criteria?.length ? Math.min(5, 2 + Math.round((testableCount / story.acceptance_criteria.length) * 3)) : 2;
   
-  // Track which ACs fail the actionVerbs test (same predicate used for testability)
+  // Track which ACs fail the testability check
   const unclearAcIndices: number[] = [];
   story.acceptance_criteria?.forEach((ac, idx) => {
-    if (!actionVerbs.test(ac.trim())) {
+    if (!isTestableAC(ac)) {
       unclearAcIndices.push(idx);
     }
   });
@@ -465,7 +504,7 @@ function calculateEvalScores(story: { title: string; description: string; accept
   // Add flags based on issues
   if (testability < 3) {
     flags.push("unclear_acceptance_criteria");
-    explanations["unclear_acceptance_criteria"] = ["Some acceptance criteria lack testable action verbs (e.g., 'User can', 'System', 'Given/When/Then')"];
+    explanations["unclear_acceptance_criteria"] = ["Some acceptance criteria lack clear testable patterns. Good ACs include: action verbs, conditional outcomes, security/performance constraints, or verifiable state changes."];
   }
   if (completeness < 3) flags.push("missing_edge_cases");
   if (!dorResult.passed) {

@@ -68,6 +68,9 @@ const STORY_SCHEMA = {
   }
 };
 
+// Build ID for runtime proof of which code is deployed
+const SB_RUN_BUILD_ID = "2026-01-07b";
+
 // Sensitive keys to redact (case-insensitive) - expanded list
 const SENSITIVE_KEYS = /api[_-]?key|token|authorization|secret|password|cookie|session|refresh|jwt|bearer|private|signature/i;
 const MAX_TEXT_LENGTH = 10000;
@@ -289,8 +292,8 @@ Description: ${story.description}
 Return ONLY a JSON array of 5 strings. Example format:
 ["User can...", "System validates...", "Error message shows...", "Data is saved...", "UI updates..."]`
       }
-    ],
-    response_format: { type: "json_object" }
+    ]
+    // NO response_format - tool calling only for structure enforcement
   };
 
   try {
@@ -752,13 +755,12 @@ Do not include any text outside the JSON object.`;
         { role: 'user', content: rawInputTrimmed || '[empty input]' }
       ];
 
-      // Build actual payload sent to LLM
+      // Build actual payload sent to LLM (NO response_format - tool calling only)
       const actualLlmPayload = {
         model: modelId.replace(":", "/"),
         messages,
         tools: [STORY_SCHEMA],
-        tool_choice: { type: "function", function: { name: "generate_user_story" } },
-        response_format: { type: "json_object" }
+        tool_choice: { type: "function", function: { name: "generate_user_story" } }
       };
 
       // Call LLM
@@ -828,8 +830,9 @@ Do not include any text outside the JSON object.`;
       // Calculate eval scores based on story quality
       const evalResult = calculateEvalScores(finalStory, dorResult, llmError);
 
-      // Build debug object with ACTUAL payload sent (redacted) + testability debug
+      // Build debug object with ACTUAL payload sent (redacted) + testability debug + build_id
       const debug = {
+        build_id: SB_RUN_BUILD_ID,
         llm_request: {
           provider: modelId.split(':')[0] || 'unknown',
           model: modelId,

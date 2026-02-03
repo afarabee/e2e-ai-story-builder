@@ -8,6 +8,22 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Type for testability debug result (declared before RunResult which uses it)
+type TestabilityDebug = {
+  heuristicVersion: string;
+  totalAC: number;
+  testableCount: number;
+  testableRatio: number;
+  threshold: number;
+  passed: boolean;
+  acDetails: Array<{
+    acIndex: number;
+    acText: string;
+    matchedPatterns: string[];
+    isTestable: boolean;
+  }>;
+};
+
 type RunResult = {
   run_id: string;
   model_id: string;
@@ -20,6 +36,7 @@ type RunResult = {
     passed: boolean;
     iterations: number;
     fail_reasons: string[];
+    testability_debug?: TestabilityDebug;
   };
   eval: {
     overall: number;
@@ -69,7 +86,78 @@ const STORY_SCHEMA = {
 };
 
 // Build ID for runtime proof of which code is deployed
-const SB_RUN_BUILD_ID = "2026-01-07b";
+const SB_RUN_BUILD_ID = "2026-01-07c";
+
+// Testability heuristic version for runtime proof
+const TESTABILITY_HEURISTIC_VERSION = "2026-01-07a";
+
+// Pattern definitions with IDs for debug logging
+const TESTABILITY_PATTERNS = {
+  actionVerbPrefix: /^(user(s)? can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable|must|should|shall|the user|the system|a user)/i,
+  conditionalTemporal: /^(if|invalid|valid|on|upon|after|before|during|while|once|unless|following|prior to)\b/i,
+  actionVerbsAnywhere: /^[A-Z][a-z]+(\s+[a-z]+)?\s+(with|in|out|up|on|off|to|from|into|for|at|by|using|via|through|requests?|actions?|attempts?|clears?|loads?|shows?|displays?|returns?|triggers?|creates?|updates?|deletes?|sends?|receives?|stores?|retrieves?|validates?|succeeds?|fails?|completes?)\b/i,
+  securityTerms: /\b(https|http-only|httponly|samesite|secure cookie|encrypted|hashed|authenticated|authorized|ssl|tls|csrf|xss|sanitized|escaped|token|jwt|oauth|session)\b/i,
+  performanceBounds: /\b(within|under|less than|at most|maximum|max|at least|minimum|min|<|>|≤|≥)\s*\d+\s*(ms|milliseconds?|seconds?|s|minutes?|m|%|percent)?\b/i,
+  passiveVerifiable: /\b(is|are|was|were|been|being)\s+(transmitted|stored|logged|displayed|shown|hidden|validated|checked|verified|saved|deleted|created|updated|sent|received|processed|encrypted|hashed|cached|loaded|rendered|accessible|cleared|returned|redirected|maintained|preserved|retained)\b/i,
+  stateOutcomeVerbs: /\b(remains|stays|becomes|appears|disappears|shows|hides|contains|includes|excludes|matches|equals|returns|responds|redirects|navigates|transitions|loads|clears|resets|expires|succeeds|fails|completes|triggers|activates|deactivates)\b/i,
+  negationPattern: /\b(do not|does not|doesn't|will not|won't|never|cannot|can't|prevent|block|deny|reject|forbid)\b/i,
+};
+
+// Analyzes a single AC for testability
+function analyzeACTestability(ac: string): { isTestable: boolean; matchedPatterns: string[] } {
+  const text = ac.trim();
+  const lower = text.toLowerCase();
+  const matchedPatterns: string[] = [];
+  
+  if (TESTABILITY_PATTERNS.actionVerbPrefix.test(text)) matchedPatterns.push("actionVerbPrefix");
+  if (TESTABILITY_PATTERNS.conditionalTemporal.test(text)) matchedPatterns.push("conditionalTemporal");
+  if (TESTABILITY_PATTERNS.actionVerbsAnywhere.test(text)) matchedPatterns.push("actionVerbsAnywhere");
+  if (TESTABILITY_PATTERNS.securityTerms.test(lower)) matchedPatterns.push("securityTerms");
+  if (TESTABILITY_PATTERNS.performanceBounds.test(lower)) matchedPatterns.push("performanceBounds");
+  if (TESTABILITY_PATTERNS.passiveVerifiable.test(lower)) matchedPatterns.push("passiveVerifiable");
+  if (TESTABILITY_PATTERNS.stateOutcomeVerbs.test(lower)) matchedPatterns.push("stateOutcomeVerbs");
+  if (TESTABILITY_PATTERNS.negationPattern.test(lower)) matchedPatterns.push("negationPattern");
+  
+  return {
+    isTestable: matchedPatterns.length > 0,
+    matchedPatterns,
+  };
+}
+
+// Computes testability debug for all ACs - SINGLE SOURCE OF TRUTH
+function computeTestabilityDebug(acceptanceCriteria: string[]): TestabilityDebug {
+  const acDetails: TestabilityDebug['acDetails'] = [];
+  let testableCount = 0;
+  
+  acceptanceCriteria.forEach((ac, idx) => {
+    const analysis = analyzeACTestability(ac);
+    acDetails.push({
+      acIndex: idx,
+      acText: ac.slice(0, 120) + (ac.length > 120 ? "..." : ""),
+      matchedPatterns: analysis.matchedPatterns,
+      isTestable: analysis.isTestable,
+    });
+    
+    if (analysis.isTestable) {
+      testableCount++;
+    }
+  });
+  
+  const totalAC = acceptanceCriteria.length;
+  const testableRatio = totalAC > 0 ? testableCount / totalAC : 0;
+  const threshold = 0.5;
+  const passed = testableRatio >= threshold;
+  
+  return {
+    heuristicVersion: TESTABILITY_HEURISTIC_VERSION,
+    totalAC,
+    testableCount,
+    testableRatio: Math.round(testableRatio * 100) / 100,
+    threshold,
+    passed,
+    acDetails,
+  };
+}
 
 // Sensitive keys to redact (case-insensitive) - expanded list
 const SENSITIVE_KEYS = /api[_-]?key|token|authorization|secret|password|cookie|session|refresh|jwt|bearer|private|signature/i;
@@ -353,8 +441,12 @@ Return ONLY a JSON array of 5 strings. Example format:
   }
 }
 
-// Run DoR validation on generated story
-function runDoRValidation(story: { title: string; description: string; acceptance_criteria: string[] }, llmError?: string): { passed: boolean; fail_reasons: string[] } {
+// Run DoR validation on generated story - NOW USES COMPUTED TESTABILITY DEBUG
+function runDoRValidation(
+  story: { title: string; description: string; acceptance_criteria: string[] },
+  testabilityDebug: TestabilityDebug,
+  llmError?: string
+): { passed: boolean; fail_reasons: string[]; testability_debug: TestabilityDebug } {
   const fail_reasons: string[] = [];
   
   // If LLM errored, DoR fails
@@ -380,41 +472,32 @@ function runDoRValidation(story: { title: string; description: string; acceptanc
     fail_reasons.push(`Too many acceptance criteria (${story.acceptance_criteria.length}, max 7)`);
   }
   
-  // Check for testable ACs (should have action verbs)
-  const actionVerbs = /^(user can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable)/i;
-  const testableCount = story.acceptance_criteria?.filter(ac => actionVerbs.test(ac.trim())).length || 0;
-  if (story.acceptance_criteria && testableCount < Math.ceil(story.acceptance_criteria.length / 2)) {
+  // FIXED: Use the computed testabilityDebug instead of legacy regex
+  // Only add fail reason if testability check FAILED
+  if (!testabilityDebug.passed) {
     fail_reasons.push("Less than half of acceptance criteria appear testable");
   }
   
   return {
     passed: fail_reasons.length === 0,
-    fail_reasons
+    fail_reasons,
+    testability_debug: testabilityDebug,
   };
 }
 
-// Calculate eval scores from story quality
-function calculateEvalScores(story: { title: string; description: string; acceptance_criteria: string[] }, dorResult: { passed: boolean; fail_reasons: string[] }, llmError?: string): {
+// Calculate eval scores from story quality - USES TESTABILITY FROM DOR
+function calculateEvalScores(
+  story: { title: string; description: string; acceptance_criteria: string[] },
+  dorResult: { passed: boolean; fail_reasons: string[]; testability_debug: TestabilityDebug },
+  llmError?: string
+): {
   overall: number;
   needs_review: boolean;
   dimensions: Record<string, number>;
   flags: string[];
   explanations?: Record<string, string[]>;
   unclear_ac_indices?: number[];
-  testability_debug?: {
-    heuristicVersion: string;
-    totalAC: number;
-    testableCount: number;
-    testableRatio: number;
-    threshold: number;
-    passed: boolean;
-    acDetails: Array<{
-      acIndex: number;
-      acText: string;
-      matchedPatterns: string[];
-      isTestable: boolean;
-    }>;
-  };
+  testability_debug?: TestabilityDebug;
 } {
   const flags: string[] = [];
   const explanations: Record<string, string[]> = {};
@@ -441,89 +524,17 @@ function calculateEvalScores(story: { title: string; description: string; accept
     clarity = 4;
   }
   
-  // Calculate testability score (based on AC quality)
-  // Version stamp for debugging which heuristic is running
-  const TESTABILITY_HEURISTIC_VERSION = "2026-01-07a";
+  // USE TESTABILITY FROM DOR - single source of truth
+  const testabilityDebug = dorResult.testability_debug;
+  const testableRatio = testabilityDebug.testableRatio;
+  const testability = testabilityDebug.totalAC > 0 ? Math.min(5, 2 + Math.round(testableRatio * 3)) : 2;
   
-  // Pattern definitions with IDs for debug logging
-  const testabilityPatterns = {
-    actionVerbPrefix: /^(user(s)? can|system|given|when|then|verify|ensure|check|validate|confirm|display|show|allow|prevent|enable|disable|must|should|shall|the user|the system|a user)/i,
-    conditionalTemporal: /^(if|invalid|valid|on|upon|after|before|during|while|once|unless|following|prior to)\b/i,
-    actionVerbsAnywhere: /^[A-Z][a-z]+(\s+[a-z]+)?\s+(with|in|out|up|on|off|to|from|into|for|at|by|using|via|through|requests?|actions?|attempts?|clears?|loads?|shows?|displays?|returns?|triggers?|creates?|updates?|deletes?|sends?|receives?|stores?|retrieves?|validates?|succeeds?|fails?|completes?)\b/i,
-    securityTerms: /\b(https|http-only|httponly|samesite|secure cookie|encrypted|hashed|authenticated|authorized|ssl|tls|csrf|xss|sanitized|escaped|token|jwt|oauth|session)\b/i,
-    performanceBounds: /\b(within|under|less than|at most|maximum|max|at least|minimum|min|<|>|≤|≥)\s*\d+\s*(ms|milliseconds?|seconds?|s|minutes?|m|%|percent)?\b/i,
-    passiveVerifiable: /\b(is|are|was|were|been|being)\s+(transmitted|stored|logged|displayed|shown|hidden|validated|checked|verified|saved|deleted|created|updated|sent|received|processed|encrypted|hashed|cached|loaded|rendered|accessible|cleared|returned|redirected|maintained|preserved|retained)\b/i,
-    stateOutcomeVerbs: /\b(remains|stays|becomes|appears|disappears|shows|hides|contains|includes|excludes|matches|equals|returns|responds|redirects|navigates|transitions|loads|clears|resets|expires|succeeds|fails|completes|triggers|activates|deactivates)\b/i,
-    negationPattern: /\b(do not|does not|doesn't|will not|won't|never|cannot|can't|prevent|block|deny|reject|forbid)\b/i,
-  };
+  // Collect unclear AC indices from the debug data
+  const unclearAcIndices: number[] = testabilityDebug.acDetails
+    .filter(ac => !ac.isTestable)
+    .map(ac => ac.acIndex);
   
-  // isTestableAC: Determines if an AC is testable and returns matched patterns for debugging
-  const analyzeTestability = (ac: string): { isTestable: boolean; matchedPatterns: string[] } => {
-    const text = ac.trim();
-    const lower = text.toLowerCase();
-    const matchedPatterns: string[] = [];
-    
-    if (testabilityPatterns.actionVerbPrefix.test(text)) matchedPatterns.push("actionVerbPrefix");
-    if (testabilityPatterns.conditionalTemporal.test(text)) matchedPatterns.push("conditionalTemporal");
-    if (testabilityPatterns.actionVerbsAnywhere.test(text)) matchedPatterns.push("actionVerbsAnywhere");
-    if (testabilityPatterns.securityTerms.test(lower)) matchedPatterns.push("securityTerms");
-    if (testabilityPatterns.performanceBounds.test(lower)) matchedPatterns.push("performanceBounds");
-    if (testabilityPatterns.passiveVerifiable.test(lower)) matchedPatterns.push("passiveVerifiable");
-    if (testabilityPatterns.stateOutcomeVerbs.test(lower)) matchedPatterns.push("stateOutcomeVerbs");
-    if (testabilityPatterns.negationPattern.test(lower)) matchedPatterns.push("negationPattern");
-    
-    return {
-      isTestable: matchedPatterns.length > 0,
-      matchedPatterns,
-    };
-  };
-  
-  // Analyze each AC and build debug log
-  const acAnalysis: Array<{
-    acIndex: number;
-    acText: string;
-    matchedPatterns: string[];
-    isTestable: boolean;
-  }> = [];
-  
-  const unclearAcIndices: number[] = [];
-  let testableCount = 0;
-  
-  story.acceptance_criteria?.forEach((ac, idx) => {
-    const analysis = analyzeTestability(ac);
-    acAnalysis.push({
-      acIndex: idx,
-      acText: ac.slice(0, 120) + (ac.length > 120 ? "..." : ""),
-      matchedPatterns: analysis.matchedPatterns,
-      isTestable: analysis.isTestable,
-    });
-    
-    if (analysis.isTestable) {
-      testableCount++;
-    } else {
-      unclearAcIndices.push(idx);
-    }
-  });
-  
-  const totalAC = story.acceptance_criteria?.length || 0;
-  const testableRatio = totalAC > 0 ? testableCount / totalAC : 0;
-  const testabilityThreshold = 0.5; // At least half must be testable for score >= 3
-  const testabilityPassed = testableRatio >= testabilityThreshold;
-  
-  // Build testability debug summary
-  const testabilityDebug = {
-    heuristicVersion: TESTABILITY_HEURISTIC_VERSION,
-    totalAC,
-    testableCount,
-    testableRatio: Math.round(testableRatio * 100) / 100,
-    threshold: testabilityThreshold,
-    passed: testabilityPassed,
-    acDetails: acAnalysis,
-  };
-  
-  console.log(`[sb-run] testability: version=${TESTABILITY_HEURISTIC_VERSION} total=${totalAC} testable=${testableCount} ratio=${testableRatio.toFixed(2)} passed=${testabilityPassed}`);
-  
-  const testability = totalAC > 0 ? Math.min(5, 2 + Math.round(testableRatio * 3)) : 2;
+  console.log(`[sb-run] testability: version=${testabilityDebug.heuristicVersion} total=${testabilityDebug.totalAC} testable=${testabilityDebug.testableCount} ratio=${testableRatio.toFixed(2)} passed=${testabilityDebug.passed}`);
   
   // Calculate completeness score (based on AC count)
   const acCount = story.acceptance_criteria?.length || 0;
@@ -569,7 +580,7 @@ function calculateEvalScores(story: { title: string; description: string; accept
     flags: string[];
     explanations?: Record<string, string[]>;
     unclear_ac_indices?: number[];
-    testability_debug?: typeof testabilityDebug;
+    testability_debug?: TestabilityDebug;
   } = {
     overall,
     needs_review,
@@ -824,10 +835,13 @@ Do not include any text outside the JSON object.`;
         };
       }
 
-      // FIX #2: Run actual DoR validation on the generated story
-      const dorResult = runDoRValidation(finalStory, llmError);
+      // FIXED: Compute testability ONCE, then pass to DoR
+      const testabilityDebug = computeTestabilityDebug(finalStory.acceptance_criteria);
       
-      // Calculate eval scores based on story quality
+      // Run DoR validation using computed testability
+      const dorResult = runDoRValidation(finalStory, testabilityDebug, llmError);
+      
+      // Calculate eval scores based on story quality (now receives testability from DoR)
       const evalResult = calculateEvalScores(finalStory, dorResult, llmError);
 
       // Build debug object with ACTUAL payload sent (redacted) + testability debug + build_id
@@ -841,7 +855,7 @@ Do not include any text outside the JSON object.`;
           payload: redactSecrets(actualLlmPayload),
         },
         llm_error: llmError,
-        testability: evalResult.testability_debug,
+        testability: testabilityDebug,
       };
 
       const result: RunResult = {
@@ -852,6 +866,7 @@ Do not include any text outside the JSON object.`;
           passed: dorResult.passed,
           iterations,
           fail_reasons: dorResult.fail_reasons,
+          testability_debug: dorResult.testability_debug,
         },
         eval: evalResult,
         debug,

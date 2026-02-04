@@ -1,31 +1,25 @@
 # E2E AI Story Builder
 
-**End-to-end AI-powered user story generation with Definition-of-Ready enforcement, evaluation (evals), and human-in-the-loop review.**
+**End-to-end AI-powered user story generation with Definition-of-Ready enforcement, evaluation scoring, and human-in-the-loop review.**
 
-This project demonstrates how to design and ship an AI-assisted product workflow that goes beyond simple text generation by combining:
+This project demonstrates how to design and ship an AI-assisted product workflow that goes beyond simple text generation by combining structured generation, deterministic gating (DoR), post-generation evaluation (evals), and transparent, reviewable outputs for humans.
 
-* structured generation,
-* iterative refinement,
-* deterministic gating (DoR),
-* post-generation evaluation (evals), and
-* transparent, reviewable outputs for humans.
+This project is part of the **AI with Aimee** portfolio and reflects real-world enterprise AI patterns.
 
 ---
 
 ## 🎯 What This Project Demonstrates
 
-This repo is intentionally built as a **working demo**, not a toy example.
+This repo is a **working demo**, not a toy example.
 
 It shows how to:
 
-* Generate user stories from raw input using LLMs
-* Enforce **Definition of Ready (DoR)** as a hard gate
-* Run **evaluations (evals) after DoR passes** (evals ≠ DoR)
-* Compare outputs across models (OpenAI vs Gemini)
+* Generate user stories from raw input using LLMs (OpenAI / Gemini)
+* Enforce **Definition of Ready (DoR)** as a hard gate with testability heuristics
+* Run **evaluations (evals) after DoR passes** across 5 dimensions
+* Compare outputs across models side-by-side
 * Surface quality signals to humans without blocking flow
-* Design AI systems that are observable, auditable, and demoable
-
-This project is part of the **AI with Aimee** portfolio and is designed to reflect real-world enterprise AI patterns.
+* Build observable, auditable AI systems with debug tooling
 
 ---
 
@@ -35,48 +29,43 @@ This project is part of the **AI with Aimee** portfolio and is designed to refle
 
 * **Definition of Ready (DoR)** is a *gate*
   → A story must pass DoR before it can move forward.
+  → Uses deterministic testability heuristics (50% threshold)
 * **Evals** are *measurements*
   → Evals run **after** DoR passes.
-  → Evals may fail without triggering refinement.
-  → Failures surface risk, not automation loops.
+  → Eval failures surface risk, not automation loops.
+  → Humans decide what to do next.
 
 This separation is intentional and critical for responsible AI systems.
 
----
-
 ### 2. Human-in-the-Loop by Design
 
-* The system never “silently fixes” quality issues post-DoR.
+* The system never "silently fixes" quality issues post-DoR
 * Eval failures surface as:
+  * Dimension-level scores with explanations
+  * "Unclear" badges on flagged acceptance criteria
+  * Visual highlighting in the story editor
+* Humans decide what to do next
 
-  * “Needs review” badges
-  * Dimension-level scores
-  * Explicit flags and checklists
-* Humans decide what to do next.
+### 3. Single Source of Truth
 
----
-
-### 3. Real Architecture, Not a Monolith
-
-This project uses a **hybrid architecture** to reflect production patterns.
+* DoR status derives from `testability_debug.passed`
+* No redundant or conflicting testability checks
+* Debug payloads prove exactly what logic ran
 
 ---
 
 ## 🏗 Architecture Overview
 
-The Python story-generation pipeline used by this system—including generation, refinement, field-level edits, and Definition-of-Ready enforcement—was authored by the project owner and is intentionally separated into a standalone service to preserve testability, reuse, and governance boundaries.
-
-
 ```
-Lovable UI
-   |
-   v
-Supabase Edge Functions (Orchestration)
-   |
-   v
-Python Story Pipeline Service
-   |
-   v
+Lovable UI (React + Vite)
+       |
+       v
+Supabase Edge Function (sb-run)
+       |
+       v
+Lovable AI Gateway
+       |
+       v
 LLMs (OpenAI / Gemini)
 ```
 
@@ -84,105 +73,217 @@ LLMs (OpenAI / Gemini)
 
 #### Lovable UI
 
-* Story input & configuration
+* Story input (role / goal / benefit)
 * Model selection (OpenAI / Gemini / both)
 * Side-by-side comparison views
-* Eval scorecards and review checklists
+* DoR status cards and eval scorecards
+* Debug tools (View Run Input modal)
 
-#### Supabase Edge Functions
+#### Edge Function (sb-run)
 
-* Authentication & session handling
-* Orchestration of story runs
+* Orchestration of story generation runs
+* Prompt template filling and LLM calls
+* Testability heuristic evaluation
+* DoR gating logic
+* Eval scoring (5 dimensions)
 * Persistence to Supabase tables
-* No LLM logic, no story logic
 
-#### Python Story Pipeline (separate repo)
+#### Lovable AI Gateway
 
-* Generate → refine → refine-field
-* Definition-of-Ready checks
-* Iterative improvement loops
-* Post-DoR eval execution
+* Unified access to OpenAI and Gemini models
+* Secret management (no API keys in code)
+* Tool-calling enforcement for structured output
 
-> The Python service runs **actual pipeline code**, not reimplemented logic.
+---
+
+## ✨ Key Features
+
+### Story Generation
+
+* Accepts role/goal/benefit inputs
+* Generates structured user stories with 3-7 acceptance criteria
+* Uses tool-calling with JSON schema for reliable output
+* Includes validation and repair loop for malformed responses
+
+### Definition of Ready (DoR)
+
+* **Testability threshold**: 50% of ACs must match heuristic patterns
+* 8 testability patterns (action verbs, conditionals, state changes, etc.)
+* Pass/fail status with detailed breakdown
+* `testability_debug` payload for transparency
+
+### Evaluations
+
+5 scoring dimensions (1-5 scale):
+
+| Dimension | What it measures |
+|-----------|-----------------|
+| Clarity | Unambiguous language, no jargon |
+| Testability | Observable, verifiable criteria |
+| Completeness | Edge cases, error paths covered |
+| Specificity | Concrete details, no vague terms |
+| Scope | Single deliverable, right-sized |
+
+Each dimension includes explanations and flagged items.
+
+### Model Comparison
+
+* Side-by-side OpenAI vs Gemini output
+* Synchronized DoR and eval results
+* Visual diff for quick comparison
+
+### Debug Tools
+
+* **View Run Input** modal with tabs:
+  * **Messages**: System prompt (filled template) + user input
+  * **Payload**: Full LLM request with secrets redacted
+* Build ID and heuristic version for deployment verification
+
+---
+
+## 🔧 Technical Implementation
+
+### Edge Function (sb-run)
+
+Current versions:
+* `SB_RUN_BUILD_ID`: `2026-01-07c`
+* `TESTABILITY_HEURISTIC_VERSION`: `2026-01-07a`
+
+Key implementation details:
+
+1. **Tool-calling enforcement**: Uses `tool_choice: "required"` with JSON schema
+2. **No response_format**: Omitted to ensure OpenAI/Gemini compatibility
+3. **Content-JSON fallback**: Parses tool call arguments or content as JSON
+4. **Secret redaction**: API keys replaced with `[REDACTED]` in debug payloads
+
+### Testability Heuristics
+
+8 patterns that indicate an AC is testable:
+
+| # | Pattern | Example |
+|---|---------|---------|
+| 1 | Action-verb prefixes | "User can...", "System shall..." |
+| 2 | Conditional/temporal | "When...", "If...", "After..." |
+| 3 | Action-oriented verbs | "Click", "Submit", "Navigate" |
+| 4 | Security constraints | "HTTPS", "encrypted", "HttpOnly" |
+| 5 | Performance bounds | "within 2 seconds", "< 500ms" |
+| 6 | Passive-verifiable | "is stored", "is displayed" |
+| 7 | State/outcome verbs | "remains", "redirects", "shows" |
+| 8 | Negation patterns | "cannot", "must not", "no" |
+
+Threshold: ≥50% of ACs must match at least one pattern.
+
+### DoR-Testability Synchronization
+
+```typescript
+// DoR passed = testability passed (single source of truth)
+dor.passed = testabilityDebug.passed;
+dor.fail_reasons = testabilityDebug.passed ? [] : ["Less than half of acceptance criteria appear testable."];
+dor.testability_debug = testabilityDebug;
+```
 
 ---
 
 ## 🗄 Data Model (Supabase)
 
-This repo uses a Story Builder–scoped schema (`sb_*`).
+Tables prefixed with `sb_` (Story Builder scope):
 
-Key tables:
+| Table | Purpose |
+|-------|---------|
+| `sb_sessions` | User sessions with context defaults |
+| `sb_stories` | Generated stories with DoR, eval, and debug metadata |
+| `sb_actions` | Pipeline trace/actions for auditing |
+| `sb_prompt_versions` | Versioned prompt templates |
+| `sb_eval_runs` | Batch evaluation run metadata |
+| `sb_eval_cases` | Individual eval case results |
 
-* `sb_sessions` – user sessions
-* `sb_stories` – generated stories (one per model/run)
-* `sb_eval_runs` – eval results per story
-* `sb_actions` – pipeline trace/actions
-* `sb_eval_cases` – eval definitions (future use)
-
-This structure enables:
-
-* Side-by-side model comparison
-* Eval dashboards over time
-* Traceability for demos and audits
+Stories are stored as JSONB with nested `dor`, `eval`, and `debug` objects.
 
 ---
 
-## 🔁 Workflow (Current + Planned)
+## 🖥 UI Components
 
-### Current (in progress)
-
-* Story Generator UI (Lovable)
-* Supabase schema in place
-* Edge Function scaffolding
-* Python pipeline validated independently
-
-### Next (incremental)
-
-1. Wire UI → Edge Function (`sb-run`)
-2. Connect Edge → Python service
-3. Run real LLM calls (OpenAI first, Gemini next)
-4. Store stories + DoR results
-5. Run evals after DoR pass
-6. Surface evals in UI (non-blocking)
-7. Enable side-by-side model comparison
+| Component | Purpose |
+|-----------|---------|
+| `StoryBuilder` | Main generation interface with model selection |
+| `DoRStatusCard` | Pass/fail badge with testability breakdown |
+| `RunEvaluationCard` | 5-dimension eval scorecard with explanations |
+| `ComparePanel` | Side-by-side model comparison view |
+| `RunInputModal` | Debug modal (Messages + Payload tabs) |
 
 ---
 
-## 📊 Evals (High-Level)
+## 🚀 Getting Started
 
-Eval dimensions (v1, subject to iteration):
+### Prerequisites
 
-* Clarity & unambiguity
-* Acceptance criteria testability
-* Domain correctness
-* Completeness (edge cases, error paths)
-* Scope appropriateness
+* Node.js 18+
+* Lovable Cloud project (provides Supabase backend)
 
-Eval strategy:
+### Local Development
 
-* Hybrid approach:
-  * Deterministic checks
-  * LLM-as-judge with strict rubric
-* Eval failure ≠ refinement trigger
-* Eval results inform human review
+```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+```
+
+### Testing Story Generation
+
+1. Open the Story Generator page
+2. Enter role, goal, and benefit
+3. Select model(s) and click Generate
+4. Check DoR status card for pass/fail
+5. Review eval scores and flagged items
+6. Use "View Input" to inspect debug payload
+
+### Verifying Deployment
+
+Check the Payload tab for:
+* `debug.build_id` = `"2026-01-07c"`
+* `debug.testability.version` = `"2026-01-07a"`
+* `dor.passed` matches `dor.testability_debug.passed`
 
 ---
 
 ## 🔐 Security & Secrets
 
-* No API keys are stored in this repo
-* All secrets live in Supabase project settings
-* LLM calls are executed server-side only
+* No API keys stored in code
+* All secrets managed via Lovable Cloud
+* LLM calls executed server-side only
+* Debug payloads redact sensitive values
 
 This repo is safe to be **public**.
 
 ---
 
-## 📌 Why This Exists
+## 📌 Status & Roadmap
+
+### Implemented ✅
+
+* Story generation via OpenAI/Gemini
+* DoR gating with testability heuristics
+* 5-dimension eval scoring
+* Side-by-side model comparison
+* Debug tools (View Run Input)
+* Build versioning for deployment verification
+
+### Planned 🔜
+
+* Field-level refinement with chat
+* Prompt version A/B testing
+* Batch eval runner integration
+* Export/import story sets
+
+---
+
+## 📚 Why This Exists
 
 Most AI demos stop at:
 
-> “Look, the model generated text.”
+> "Look, the model generated text."
 
 This project goes further:
 
@@ -194,9 +295,4 @@ This is the level of rigor required for AI in real product environments.
 
 ---
 
-## 🚧 Status
-
-This project is under active development.
-The README will evolve alongside the implementation.
-
----
+*Built with Lovable · Part of the AI with Aimee portfolio*

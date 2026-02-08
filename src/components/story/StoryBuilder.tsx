@@ -47,6 +47,7 @@ import { ComparePanel } from "./ComparePanel";
 import { RunEvaluationCard } from "./RunEvaluationCard";
 import { RunInputModal } from "./RunInputModal";
 import { DoRStatusCard } from "./DoRStatusCard";
+import { GeneratingOverlay } from "./GeneratingOverlay";
 
 // Type for backend run response
 interface RunResponse {
@@ -1354,14 +1355,19 @@ export function StoryBuilder({
               className="w-full gap-2"
             >
               {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isGenerating ? "Generating Story..." : "Generate User Story"}
+              {isGenerating ? "Generating…" : "Generate User Story"}
             </Button>
           </CardContent>
         </Card>
       )}
 
+      {/* Loading overlay while generating */}
+      {storyGenerated && isGenerating && (
+        <GeneratingOverlay />
+      )}
+
       {/* Compare View - Side by Side Panels (only show when not editing a version) */}
-      {storyGenerated && runs.length === 2 && !isEditingFromCompare && (
+      {storyGenerated && !isGenerating && runs.length === 2 && !isEditingFromCompare && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">Compare Generated Stories</h3>
           <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">

@@ -2,3 +2,6 @@ project_id = "gbrmqjczwwntxrbcaxxa"
 
 [functions.sb-run]
 verify_jwt = false
+
+[functions.sb-fix-dor]
+verify_jwt = false

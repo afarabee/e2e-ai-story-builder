@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, XCircle, AlertCircle, Sparkles, RefreshCw } from "lucide-react";
 
 interface DoRResult {
   passed: boolean;
@@ -8,7 +9,13 @@ interface DoRResult {
   fail_reasons: string[];
 }
 
-export function DoRStatusCard({ dor }: { dor: DoRResult }) {
+interface DoRStatusCardProps {
+  dor: DoRResult;
+  onFixWithAI?: () => void;
+  isFixing?: boolean;
+}
+
+export function DoRStatusCard({ dor, onFixWithAI, isFixing }: DoRStatusCardProps) {
   return (
     <Card className={dor.passed ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-900"}>
       <CardHeader className="pb-2 pt-3">
@@ -47,6 +54,22 @@ export function DoRStatusCard({ dor }: { dor: DoRResult }) {
               ))}
             </ul>
           </div>
+          {onFixWithAI && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3 w-full gap-2"
+              onClick={onFixWithAI}
+              disabled={isFixing}
+            >
+              {isFixing ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {isFixing ? "Fixing…" : "Fix with AI"}
+            </Button>
+          )}
         </CardContent>
       )}
     </Card>

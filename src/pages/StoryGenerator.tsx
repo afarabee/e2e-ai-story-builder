@@ -11,8 +11,8 @@ import { PromptCreateModal } from "@/components/prompts/PromptCreateModal";
 
 const StoryGenerator = () => {
   const [storyGenerated, setStoryGenerated] = useState(false);
-  const [showChat, setShowChat] = useState(true);
-  const [chatCollapsed, setChatCollapsed] = useState(false); // Chat panel open by default for demo
+  const [showChat, setShowChat] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(true);
   const [story, setStory] = useState<any>(null);
   const [versions, setVersions] = useState<StoryVersion[]>([]);
   const [currentStoryContent, setCurrentStoryContent] = useState<{
@@ -84,6 +84,7 @@ const StoryGenerator = () => {
   const handleStoryGenerated = () => {
     setStoryGenerated(true);
     setShowChat(true);
+    setChatCollapsed(false); // Auto-expand chat when story is generated
   };
 
   const handleNewStory = () => {

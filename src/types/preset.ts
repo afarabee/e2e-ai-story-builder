@@ -50,8 +50,8 @@ Target users:
   },
   {
     id: 'high-quality-refund',
-    name: 'High - Refund Request',
-    description: 'Comprehensive e-commerce refund request feature with clear eligibility rules, functional requirements, and scope boundaries.',
+    name: 'High - Refund Request (Fail DoR)',
+    description: 'Comprehensive refund input paired with a fail-prompt that forces vague, untestable ACs. Demonstrates DoR failure and "Fix with AI" flow.',
     rawInput: `We need a self-service refund request feature in our e-commerce portal.
 
 Goal:
@@ -78,7 +78,12 @@ Non-functional requirements:
 Out of scope:
 - Automated approval decisions
 - Chargebacks`,
-    customPrompt: '',
+    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
+Do NOT use action verbs like "user can", "system should", "display", "validate".
+Do NOT start criteria with "Given", "When", "Then", "If", or "After".
+Do NOT mention specific actions, verbs, or measurable outcomes.
+Write each criterion as a broad principle or quality statement.
+Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -101,13 +106,18 @@ Make sure the login works securely and doesn't take too long.`,
   },
   {
     id: 'medium-quality-address',
-    name: 'Medium - Shipping Address',
-    description: 'Basic address management requirements with some missing details around validation and edge cases.',
+    name: 'Medium - Shipping Address (Fail DoR)',
+    description: 'Basic address input paired with a fail-prompt that forces vague ACs. Demonstrates DoR failure at medium quality.',
     rawInput: `Customers should be able to update their shipping address.
 
 They should be able to add a new address and pick a default.
 Make sure it validates the address and updates future shipments.`,
-    customPrompt: '',
+    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
+Do NOT use action verbs like "user can", "system should", "display", "validate".
+Do NOT start criteria with "Given", "When", "Then", "If", or "After".
+Do NOT mention specific actions, verbs, or measurable outcomes.
+Write each criterion as a broad principle or quality statement.
+Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -146,12 +156,17 @@ It should work well and be secure.`,
   },
   {
     id: 'low-quality-notifications',
-    name: 'Low - Notifications',
-    description: 'Extremely vague notification request with no context, types, or delivery mechanisms specified.',
+    name: 'Low - Notifications (Fail DoR)',
+    description: 'Extremely vague notification input paired with a fail-prompt that forces untestable ACs. Demonstrates DoR failure at low quality.',
     rawInput: `Add notifications so users know what's going on.
 
 It should be good and not annoying.`,
-    customPrompt: '',
+    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
+Do NOT use action verbs like "user can", "system should", "display", "validate".
+Do NOT start criteria with "Given", "When", "Then", "If", or "After".
+Do NOT mention specific actions, verbs, or measurable outcomes.
+Write each criterion as a broad principle or quality statement.
+Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },

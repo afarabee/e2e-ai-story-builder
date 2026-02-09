@@ -206,6 +206,9 @@ export function StoryBuilder({
   const [runInputModalOpen, setRunInputModalOpen] = useState(false);
   const [selectedRunForInput, setSelectedRunForInput] = useState<RunResponse | null>(null);
 
+  // Fix DoR state
+  const [fixingDoRRunIds, setFixingDoRRunIds] = useState<Set<string>>(new Set());
+
   // Auto-save state
   const [lastAutoSaveContent, setLastAutoSaveContent] = useState<string>('');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -822,6 +825,66 @@ export function StoryBuilder({
     setRunInputModalOpen(true);
   };
 
+  // Fix DoR with AI
+  const handleFixDoR = async (run: RunResponse) => {
+    const runId = run.run_id;
+    setFixingDoRRunIds(prev => new Set(prev).add(runId));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('sb-fix-dor', {
+        body: {
+          final_story: run.final_story,
+          fail_reasons: run.dor.fail_reasons,
+          model_id: run.model_id,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.fixed_story) throw new Error('No fixed story returned');
+
+      // Update the run in the runs array
+      setRuns(prev => prev.map(r => {
+        if (r.run_id !== runId) return r;
+        return {
+          ...r,
+          final_story: data.fixed_story,
+          dor: data.dor,
+          eval: data.eval,
+        };
+      }));
+
+      // If single mode, also update editable story state
+      if (runs.length === 1) {
+        setStory(prev => ({
+          ...prev,
+          title: data.fixed_story.title,
+          description: data.fixed_story.description,
+          acceptanceCriteria: data.fixed_story.acceptance_criteria || [],
+        }));
+      }
+
+      toast({
+        title: data.dor.passed ? "DoR Fixed!" : "Partially Fixed",
+        description: data.dor.passed
+          ? "Acceptance criteria are now testable."
+          : "Some issues remain. You can try again or edit manually.",
+      });
+    } catch (err) {
+      console.error("Fix DoR failed:", err);
+      toast({
+        title: "Fix Failed",
+        description: "Could not fix DoR. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setFixingDoRRunIds(prev => {
+        const next = new Set(prev);
+        next.delete(runId);
+        return next;
+      });
+    }
+  };
+
   const restartStory = () => {
     if (!savedOriginalStory) return;
     
@@ -1377,6 +1440,8 @@ export function StoryBuilder({
                 run={run} 
                 onEditVersion={handleEditVersion}
                 onViewInput={handleViewRunInput}
+                onFixWithAI={handleFixDoR}
+                isFixing={fixingDoRRunIds.has(run.run_id)}
               />
             ))}
           </div>
@@ -1699,7 +1764,13 @@ export function StoryBuilder({
             </CardContent>
           </Card>
 
-          {runs[0]?.dor && <DoRStatusCard dor={runs[0].dor} />}
+          {runs[0]?.dor && (
+            <DoRStatusCard
+              dor={runs[0].dor}
+              onFixWithAI={() => handleFixDoR(runs[0])}
+              isFixing={fixingDoRRunIds.has(runs[0].run_id)}
+            />
+          )}
           {runs[0]?.eval && <RunEvaluationCard evalResult={runs[0].eval} />}
 
           {/* View Run Input Button - Always shown */}

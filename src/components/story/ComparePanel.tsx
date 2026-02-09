@@ -47,9 +47,11 @@ interface ComparePanelProps {
   run: Run;
   onEditVersion?: (run: Run) => void;
   onViewInput?: (run: Run) => void;
+  onFixWithAI?: (run: Run) => void;
+  isFixing?: boolean;
 }
 
-export function ComparePanel({ run, onEditVersion, onViewInput }: ComparePanelProps) {
+export function ComparePanel({ run, onEditVersion, onViewInput, onFixWithAI, isFixing }: ComparePanelProps) {
   const { model_id, story_id, final_story, dor, eval: evalResult } = run;
 
   return (
@@ -104,7 +106,11 @@ export function ComparePanel({ run, onEditVersion, onViewInput }: ComparePanelPr
         </div>
 
         {/* DoR Status Card */}
-        <DoRStatusCard dor={dor} />
+        <DoRStatusCard
+          dor={dor}
+          onFixWithAI={onFixWithAI ? () => onFixWithAI(run) : undefined}
+          isFixing={isFixing}
+        />
 
         {/* Evaluation Card */}
         <RunEvaluationCard evalResult={evalResult} />

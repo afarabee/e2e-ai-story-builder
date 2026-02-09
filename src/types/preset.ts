@@ -78,12 +78,7 @@ Non-functional requirements:
 Out of scope:
 - Automated approval decisions
 - Chargebacks`,
-    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
-Do NOT use action verbs like "user can", "system should", "display", "validate".
-Do NOT start criteria with "Given", "When", "Then", "If", or "After".
-Do NOT mention specific actions, verbs, or measurable outcomes.
-Write each criterion as a broad principle or quality statement.
-Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
+    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -112,12 +107,7 @@ Make sure the login works securely and doesn't take too long.`,
 
 They should be able to add a new address and pick a default.
 Make sure it validates the address and updates future shipments.`,
-    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
-Do NOT use action verbs like "user can", "system should", "display", "validate".
-Do NOT start criteria with "Given", "When", "Then", "If", or "After".
-Do NOT mention specific actions, verbs, or measurable outcomes.
-Write each criterion as a broad principle or quality statement.
-Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
+    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -161,12 +151,7 @@ It should work well and be secure.`,
     rawInput: `Add notifications so users know what's going on.
 
 It should be good and not annoying.`,
-    customPrompt: `Write acceptance criteria as high-level goals and aspirational qualities only.
-Do NOT use action verbs like "user can", "system should", "display", "validate".
-Do NOT start criteria with "Given", "When", "Then", "If", or "After".
-Do NOT mention specific actions, verbs, or measurable outcomes.
-Write each criterion as a broad principle or quality statement.
-Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".`,
+    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },

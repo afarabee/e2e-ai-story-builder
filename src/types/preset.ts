@@ -16,7 +16,7 @@ export const PRESETS: Preset[] = [
   {
     id: 'high-quality',
     name: 'High - Customer Login',
-    description: 'Clear scope, actors, constraints, and acceptance expectations. Should produce high eval scores and minimal flags.',
+    description: 'Clear scope, actors, constraints, and acceptance expectations. Expected outcome: PASS DoR.',
     rawInput: `We are building a web-based customer portal for registered users.
 
 Primary goal:
@@ -51,7 +51,7 @@ Target users:
   {
     id: 'high-quality-refund',
     name: 'High - Refund Request (Fail DoR)',
-    description: 'Comprehensive refund input paired with a fail-prompt that forces vague, untestable ACs. Demonstrates DoR failure and "Fix with AI" flow.',
+    description: 'Comprehensive refund input paired with a fail-prompt that forces vague, untestable ACs. Expected outcome: FAIL DoR.',
     rawInput: `We need a self-service refund request feature in our e-commerce portal.
 
 Goal:
@@ -85,24 +85,9 @@ Out of scope:
 
   // === MEDIUM QUALITY PRESETS ===
   {
-    id: 'medium-quality',
-    name: 'Medium - Customer Login',
-    description: 'Adequate but underspecified input. Should pass generation but surface eval gaps.',
-    rawInput: `Users need to be able to log into the system and see their dashboard.
-
-They should use an email and password to sign in.
-If something goes wrong, the system should show an error.
-Once logged in, they should be able to access protected areas.
-
-Make sure the login works securely and doesn't take too long.`,
-    customPrompt: '',
-    mode: 'single',
-    models: ['openai:gpt-5-nano'],
-  },
-  {
     id: 'medium-fail-dor',
     name: 'Medium - Customer Login (Fail DoR)',
-    description: 'Medium-quality login input paired with a fail-prompt that forces vague, untestable ACs. Demonstrates DoR failure at medium quality.',
+    description: 'Medium-quality login input paired with a fail-prompt that forces vague, untestable ACs. Expected outcome: FAIL DoR.',
     rawInput: `Users need to be able to log into the system and see their dashboard.
 
 They should use an email and password to sign in.
@@ -111,30 +96,50 @@ Once logged in, they should be able to access protected areas.
 
 Make sure the login works securely and doesn't take too long.`,
     customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
+    mode: 'single',
+    models: ['openai:gpt-5-nano'],
+  },
+  {
+    id: 'medium-strong-prompt',
+    name: 'Medium + Prompt - Customer Login',
+    description: 'Mediocre input rescued by a strong custom prompt that enforces testable ACs. Expected outcome: PASS DoR.',
+    rawInput: `Users need to log in to the app using their credentials.
+
+They should see an error if login fails and access the app if it succeeds.`,
+    customPrompt: `Write the user story in clear agile format.
+
+Requirements:
+- Use "As a / I want / So that" format
+- Generate 5–7 acceptance criteria
+- Include at least:
+  - one negative scenario
+  - one performance-related criterion
+- Avoid vague language like "should work" or "properly"
+- Make acceptance criteria objectively testable`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
 
   // === LOW QUALITY PRESETS ===
   {
-    id: 'low-quality',
-    name: 'Low - Customer Login',
-    description: 'Minimal context. Should generate a generic story with lower eval scores and review flags.',
+    id: 'low-fail-dor',
+    name: 'Low - Customer Login (Fail DoR)',
+    description: 'Minimal login input paired with a fail-prompt that forces untestable ACs. Expected outcome: FAIL DoR.',
     rawInput: `Build a login feature for users.
 
 It should work well and be secure.`,
-    customPrompt: '',
+    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
   {
     id: 'low-quality-notifications',
-    name: 'Low - Notifications (Fail DoR)',
-    description: 'Extremely vague notification input paired with a fail-prompt that forces untestable ACs. Demonstrates DoR failure at low quality.',
+    name: 'Low - Notifications',
+    description: 'Vague notification input rescued by a pass-inducing prompt that enforces testable ACs. Expected outcome: PASS DoR.',
     rawInput: `Add notifications so users know what's going on.
 
 It should be good and not annoying.`,
-    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
+    customPrompt: `Write the user story in clear agile format. Make acceptance criteria specific, measurable, and testable. Each criterion should start with an action verb and describe observable system behavior.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },

@@ -1,102 +1,79 @@
 
 
-# Plan: Generate Updated README.md
+# Plan: Update Presets for Reliable DoR Pass/Fail Demo
 
-## Overview
+## Goal
 
-The current README.md is outdated and describes the project as "in progress" with planned features that have since been implemented. I'll create an updated README that accurately reflects the current working state of the application.
+Restructure the preset scenarios so that within each quality tier (High, Medium, Low), one preset reliably **passes** DoR and one reliably **fails** DoR. This gives a clear demo of the "Fix with AI" feature.
 
-## Key Updates Needed
+## Why Stories Currently Always Pass
 
-### 1. Architecture Section
-**Current**: Shows a 3-layer architecture with a separate Python pipeline service
-**Update**: The architecture has evolved - the edge function (`sb-run`) now handles story generation directly via Lovable AI Gateway, eliminating the separate Python service
+The DoR gate marks an acceptance criterion as "testable" if it matches **any one** of 8 very broad regex patterns (e.g., starts with "User can", "System should", contains words like "returns", "displays", "validates", etc.). The threshold is only 50%. Modern LLMs naturally produce ACs that match these patterns, so virtually everything passes.
 
-### 2. Workflow Status
-**Current**: Lists many features as "planned" or "next"
-**Update**: Most core features are now implemented:
-- Story generation via OpenAI/Gemini models
-- Definition of Ready (DoR) gating with testability heuristics
-- Evaluation scoring with dimension breakdowns
-- Side-by-side model comparison
-- Debug tools (View Run Input, testability analysis)
+## Strategy to Force DoR Failures
 
-### 3. Technical Implementation Details
-**Add new sections for**:
-- Build versioning system (`SB_RUN_BUILD_ID`)
-- Testability heuristic patterns and version tracking
-- DoR/Eval separation with single source of truth
-- Lovable AI Gateway integration
+The only reliable lever is the **custom prompt**. By instructing the LLM to write ACs in a deliberately vague, outcome-free style (no action verbs, no conditional logic, no security terms, no performance bounds), the generated ACs will dodge the heuristic patterns and fail DoR.
 
-### 4. Data Model
-**Update**: Clarify the current tables in use and their purpose
+A "fail prompt" like the following will instruct the model to produce non-testable ACs:
 
-### 5. Getting Started
-**Add**: Instructions for running and testing the application
-
-## New README Structure
-
-```text
-1. Title and Description (updated)
-2. What This Project Demonstrates (updated with implemented features)
-3. Core Design Principles (keep, still accurate)
-4. Architecture Overview (updated - no Python service)
-5. Key Features (new section)
-   - Story Generation
-   - Definition of Ready (DoR)
-   - Evaluations
-   - Model Comparison
-   - Debug Tools
-6. Technical Implementation
-   - Edge Function (sb-run)
-   - Testability Heuristics
-   - Build Versioning
-7. Data Model (updated)
-8. UI Components
-9. Getting Started
-10. Security & Secrets
-11. Status & Roadmap
+```
+Write acceptance criteria as high-level goals and aspirational qualities only.
+Do NOT use action verbs like "user can", "system should", "display", "validate".
+Do NOT start criteria with "Given", "When", "Then", "If", or "After".
+Do NOT mention specific actions, verbs, or measurable outcomes.
+Write each criterion as a broad principle or quality statement.
+Example: "Good overall experience", "Appropriate level of security", "Intuitive flow".
 ```
 
-## Content Details
+## Preset Restructure
 
-### Architecture Diagram Update
-```text
-Lovable UI (React + Vite)
-       |
-       v
-Supabase Edge Function (sb-run)
-       |
-       v
-Lovable AI Gateway
-       |
-       v
-LLMs (OpenAI / Gemini)
-```
+Each tier keeps two presets: one with no custom prompt (natural LLM output -- passes DoR), and one with the "fail prompt" (forces vague ACs -- fails DoR).
 
-### Key Features to Document
-1. **Story Generation**: Takes role/goal/benefit inputs, generates structured user stories
-2. **DoR Gate**: Enforces testability threshold (50% of ACs must match patterns)
-3. **Eval Dimensions**: Clarity, Testability, Completeness, Specificity, Scope
-4. **Compare Mode**: Side-by-side OpenAI vs Gemini output comparison
-5. **Debug Tools**: View Run Input modal with messages and payload tabs
+### High Quality Tier
 
-### Technical Details to Include
-- 8 testability heuristic patterns with version tracking
-- Build ID system for deployment verification
-- Tool-calling enforcement (no response_format)
-- Secret redaction in debug payloads
+| Preset | Expected DoR | Change |
+|--------|-------------|--------|
+| `High - Customer Login` | PASS | No change (already passes reliably) |
+| `High - Refund Request` | FAIL | Add the fail-prompt as `customPrompt` to force vague ACs. Update description and name to `High - Refund Request (Fail DoR)` |
+
+### Medium Quality Tier
+
+| Preset | Expected DoR | Change |
+|--------|-------------|--------|
+| `Medium - Customer Login` | PASS | No change |
+| `Medium - Shipping Address` | FAIL | Add the fail-prompt as `customPrompt`. Update name to `Medium - Shipping Address (Fail DoR)` |
+| `Medium + Prompt - Customer Login` | Keep as-is | This preset demonstrates prompt improvement and still passes DoR, so it stays unchanged |
+
+### Low Quality Tier
+
+| Preset | Expected DoR | Change |
+|--------|-------------|--------|
+| `Low - Customer Login` | PASS | No change |
+| `Low - Notifications` | FAIL | Add the fail-prompt as `customPrompt`. Update name to `Low - Notifications (Fail DoR)` |
+
+### Compare Presets
+
+No changes -- these are for model comparison, not DoR demo.
 
 ## File Changes
 
 | File | Action |
 |------|--------|
-| `README.md` | Replace entire content with updated version |
+| `src/types/preset.ts` | Update 3 presets: add `customPrompt` with the fail-prompt to `high-quality-refund`, `medium-quality-address`, and `low-quality-notifications`. Update their `name` and `description` fields to indicate they are expected to fail DoR. |
 
-## Implementation Notes
-- Keep the professional tone and structure
-- Maintain the "AI with Aimee" portfolio branding
-- Preserve the distinction between DoR (gate) and Evals (measurement)
-- Document current build version: `2026-01-07c`
-- Document testability heuristic version: `2026-01-07a`
+## Technical Details
+
+Only `src/types/preset.ts` is modified. The fail-prompt text is added to the `customPrompt` field of three existing presets. No backend or edge function changes are needed -- the custom prompt is already sent to the LLM as part of the generation request in `sb-run`.
+
+The fail-prompt is designed to dodge all 8 `TESTABLE_PATTERNS` regexes:
+- No `actionVerbPrefix` triggers (avoids "User can", "System", "Given/When/Then", etc.)
+- No `conditionalTemporal` triggers (avoids "If", "After", "Before", etc.)
+- No `actionVerbsAnywhere` triggers (avoids verb-preposition patterns)
+- No `securityTerms` (avoids "encrypted", "hashed", "token", etc.)
+- No `performanceBounds` (avoids "within 2 seconds", etc.)
+- No `passiveVerifiable` (avoids "is stored", "is displayed", etc.)
+- No `stateOutcomeVerbs` (avoids "returns", "redirects", "shows", etc.)
+- No `negationPattern` (avoids "cannot", "does not", etc.)
+
+With more than 50% of ACs failing all patterns, the DoR gate will reliably fail.
 

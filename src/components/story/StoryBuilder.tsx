@@ -1245,23 +1245,6 @@ export function StoryBuilder({
               <MessageSquare className="h-4 w-4" />
               Chat
             </Button>
-            <Button 
-              onClick={handleNewStoryClick}
-              variant="outline"
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New User Story
-            </Button>
-            <Button 
-              onClick={restartStory}
-              variant="outline"
-              disabled={!savedOriginalStory}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Restart Story
-            </Button>
           </div>
         </div>
       )}

@@ -1524,9 +1524,9 @@ export function StoryBuilder({
                 </div>
                 <div className="space-y-2 mt-2">
                   {story.acceptanceCriteria.map((criterion, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0" />
-                        <Input
+                      <div key={index} className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0 mt-2.5" />
+                        <Textarea
                           value={criterion}
                           onChange={(e) => {
                             const newCriteria = [...story.acceptanceCriteria];
@@ -1535,11 +1535,12 @@ export function StoryBuilder({
                           }}
                           placeholder="Enter acceptance criterion..."
                           className={cn(
-                            "text-sm flex-1",
+                            "text-sm flex-1 min-h-[2.5rem] resize-none",
                             highlightedContent?.field === 'acceptance-criteria' && 
                             highlightedContent?.index === index && 
                             "text-highlight-applied"
                           )}
+                          rows={2}
                         />
                       <Button
                         variant="ghost"
@@ -1677,9 +1678,9 @@ export function StoryBuilder({
                 </div>
                 <div className="space-y-2 mt-2">
                   {story.acceptanceCriteria.map((criterion, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0" />
-                        <Input
+                      <div key={index} className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-status-ready flex-shrink-0 mt-2.5" />
+                        <Textarea
                           value={criterion}
                           onChange={(e) => {
                             const newCriteria = [...story.acceptanceCriteria];
@@ -1688,11 +1689,12 @@ export function StoryBuilder({
                           }}
                           placeholder="Enter acceptance criterion..."
                           className={cn(
-                            "text-sm flex-1",
+                            "text-sm flex-1 min-h-[2.5rem] resize-none",
                             highlightedContent?.field === 'acceptance-criteria' && 
                             highlightedContent?.index === index && 
                             "text-highlight-applied"
                           )}
+                          rows={2}
                         />
                       <Button
                         variant="ghost"

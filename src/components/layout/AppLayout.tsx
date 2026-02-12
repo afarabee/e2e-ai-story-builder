@@ -10,7 +10,8 @@ import {
   Copy,
   Eye,
   Zap,
-  FlaskConical
+  FlaskConical,
+  PanelLeft
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,8 @@ interface AppLayoutProps {
   chatContent?: React.ReactNode;
   showChat?: boolean;
   chatCollapsed?: boolean;
+  showSidebar?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export default function AppLayout({ 
@@ -29,7 +32,9 @@ export default function AppLayout({
   sidebarContent, 
   chatContent, 
   showChat = false,
-  chatCollapsed = true
+  chatCollapsed = true,
+  showSidebar = true,
+  onToggleSidebar
 }: AppLayoutProps) {
   const [currentProject] = useState("E-commerce Platform");
   const [connectionStatus] = useState({
@@ -83,6 +88,11 @@ export default function AppLayout({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1">
+            {sidebarContent && onToggleSidebar && (
+              <Button variant="ghost" size="icon-sm" title={showSidebar ? "Hide Sidebar" : "Show Sidebar"} onClick={onToggleSidebar}>
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon-sm" title="Undo">
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -110,7 +120,7 @@ export default function AppLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex">
         {/* Sidebar */}
-        {sidebarContent && (
+        {sidebarContent && showSidebar && (
           <aside className="w-72 border-r border-border bg-card">
             {sidebarContent}
           </aside>

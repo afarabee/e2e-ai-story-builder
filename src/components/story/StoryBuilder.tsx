@@ -25,6 +25,7 @@ import {
   ChevronUp,
   RefreshCw,
   X,
+  XCircle,
   Eye,
   Trash2,
   Send,
@@ -1891,6 +1892,50 @@ export function StoryBuilder({
         debug={selectedRunForInput?.debug}
       />
       </div>
+
+      {/* Sticky DoR Status Bar */}
+      {storyGenerated && !isGenerating && runs.length > 0 && runs[0]?.dor && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm shadow-[0_-2px_10px_rgba(0,0,0,0.08)]">
+          <div className="max-w-[900px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {runs[0].dor.passed ? (
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              )}
+              <div className="min-w-0">
+                <span className={cn(
+                  "text-sm font-semibold",
+                  runs[0].dor.passed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                )}>
+                  Definition of Ready: {runs[0].dor.passed ? "Passed" : "Failed"}
+                </span>
+                {!runs[0].dor.passed && runs[0].dor.fail_reasons.length > 0 && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {runs[0].dor.fail_reasons[0]}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!runs[0].dor.passed && (
+              <Button
+                size="sm"
+                variant="ai"
+                className="gap-2 flex-shrink-0"
+                onClick={() => handleFixDoR(runs[0])}
+                disabled={fixingDoRRunIds.has(runs[0].run_id)}
+              >
+                {fixingDoRRunIds.has(runs[0].run_id) ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {fixingDoRRunIds.has(runs[0].run_id) ? "Fixing…" : "Fix with AI"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

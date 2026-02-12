@@ -9,10 +9,14 @@ import { getPromptVersions } from "@/lib/supabase/promptVersions";
 import { PromptViewModal } from "@/components/prompts/PromptViewModal";
 import { PromptCreateModal } from "@/components/prompts/PromptCreateModal";
 
+const FIRST_LOAD_KEY = 'story-generator-first-load-done';
+
 const StoryGenerator = () => {
+  const isFirstLoad = !localStorage.getItem(FIRST_LOAD_KEY);
   const [storyGenerated, setStoryGenerated] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(!isFirstLoad);
   const [story, setStory] = useState<any>(null);
   const [versions, setVersions] = useState<StoryVersion[]>([]);
   const [currentStoryContent, setCurrentStoryContent] = useState<{
@@ -35,8 +39,7 @@ const StoryGenerator = () => {
   const presetChangeRef = useRef<((value: string) => void) | null>(null);
   const applyPresetRef = useRef<(() => void) | null>(null);
   const runPresetRef = useRef<((presetId: string) => void) | null>(null);
-
-  // Prompt version state
+  const [presetHandlersReady, setPresetHandlersReady] = useState(false);
   const [promptVersions, setPromptVersions] = useState<PromptVersion[]>([]);
   const [selectedPromptVersionId, setSelectedPromptVersionId] = useState<string>('');
   const [viewPromptModalOpen, setViewPromptModalOpen] = useState(false);
@@ -46,6 +49,16 @@ const StoryGenerator = () => {
   useEffect(() => {
     fetchPromptVersions();
   }, []);
+
+  // Auto-run "Medium - Customer Login (Fail DoR)" preset on first load
+  const autoRunTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (isFirstLoad && presetHandlersReady && !autoRunTriggeredRef.current && runPresetRef.current) {
+      autoRunTriggeredRef.current = true;
+      localStorage.setItem(FIRST_LOAD_KEY, 'true');
+      runPresetRef.current('medium-fail-dor');
+    }
+  }, [isFirstLoad, presetHandlersReady]);
 
   const fetchPromptVersions = async () => {
     try {
@@ -83,8 +96,11 @@ const StoryGenerator = () => {
 
   const handleStoryGenerated = () => {
     setStoryGenerated(true);
-    setShowChat(true);
-    setChatCollapsed(false); // Auto-expand chat when story is generated
+    // On first load auto-run, keep chat hidden; otherwise expand it
+    if (!isFirstLoad) {
+      setShowChat(true);
+      setChatCollapsed(false);
+    }
   };
 
   const handleNewStory = () => {
@@ -105,6 +121,10 @@ const StoryGenerator = () => {
 
   const handleToggleChat = () => {
     setShowChat(!showChat);
+  };
+
+  const handleToggleSidebar = () => {
+    setShowSidebar(prev => !prev);
   };
 
   const handleApplySuggestion = (type: string, content: any) => {
@@ -193,6 +213,8 @@ const StoryGenerator = () => {
       }
       showChat={showChat}
       chatCollapsed={chatCollapsed}
+      showSidebar={showSidebar}
+      onToggleSidebar={handleToggleSidebar}
     >
       <StoryBuilder 
         storyGenerated={storyGenerated}
@@ -217,6 +239,7 @@ const StoryGenerator = () => {
           presetChangeRef.current = presetChange;
           applyPresetRef.current = applyPreset;
           runPresetRef.current = runPreset;
+          setPresetHandlersReady(true);
         }}
       />
 

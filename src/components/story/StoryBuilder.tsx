@@ -1214,7 +1214,7 @@ export function StoryBuilder({
         onConfirm={handleConfirmNewStory}
         onCancel={handleCancelNewStory}
       />
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-[900px] mx-auto">
       {/* Progress Header - Only show when story is generated */}
       {storyGenerated && (
         <div className="flex items-center justify-between">

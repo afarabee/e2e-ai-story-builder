@@ -78,7 +78,13 @@ Non-functional requirements:
 Out of scope:
 - Automated approval decisions
 - Chargebacks`,
-    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
+    customPrompt: `Write acceptance criteria as abstract quality statements, NOT testable behaviors. Each criterion must describe a feeling, aspiration, or quality attribute — never an observable system action.
+
+STRICTLY FORBIDDEN words/phrases (do not use ANY of these): can, should, must, shall, will, displays, returns, validates, shows, appears, contains, includes, matches, remains, stays, becomes, loads, clears, resets, expires, triggers, redirects, navigates, responds, fails, succeeds, completes, prevents, blocks, stored, logged, saved, verified, checked, encrypted, hashed, authenticated, given, when, then, if, after, before, upon, user can, system, verify, ensure, confirm, allow, enable, disable.
+
+INSTEAD use phrases like: 'The experience feels intuitive', 'The flow is seamless', 'Performance meets expectations', 'Feedback is appropriate', 'The interaction feels natural', 'Quality is maintained throughout', 'The overall impression is professional'.
+
+Do NOT start any criterion with a verb. Do NOT describe what the system does. Only describe subjective qualities and aspirations.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -95,7 +101,13 @@ If something goes wrong, the system should show an error.
 Once logged in, they should be able to access protected areas.
 
 Make sure the login works securely and doesn't take too long.`,
-    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
+    customPrompt: `Write acceptance criteria as abstract quality statements, NOT testable behaviors. Each criterion must describe a feeling, aspiration, or quality attribute — never an observable system action.
+
+STRICTLY FORBIDDEN words/phrases (do not use ANY of these): can, should, must, shall, will, displays, returns, validates, shows, appears, contains, includes, matches, remains, stays, becomes, loads, clears, resets, expires, triggers, redirects, navigates, responds, fails, succeeds, completes, prevents, blocks, stored, logged, saved, verified, checked, encrypted, hashed, authenticated, given, when, then, if, after, before, upon, user can, system, verify, ensure, confirm, allow, enable, disable.
+
+INSTEAD use phrases like: 'The experience feels intuitive', 'The flow is seamless', 'Performance meets expectations', 'Feedback is appropriate', 'The interaction feels natural', 'Quality is maintained throughout', 'The overall impression is professional'.
+
+Do NOT start any criterion with a verb. Do NOT describe what the system does. Only describe subjective qualities and aspirations.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },
@@ -128,7 +140,13 @@ Requirements:
     rawInput: `Build a login feature for users.
 
 It should work well and be secure.`,
-    customPrompt: `Write acceptance criteria using subjective, qualitative language. Focus on user feelings and experience quality rather than specific system behaviors. Use phrases like 'intuitive experience', 'seamless flow', 'good performance', 'appropriate feedback'. Do NOT use action verbs like 'can', 'should', 'must', 'displays', 'returns', 'validates'. Avoid measurable or verifiable criteria.`,
+    customPrompt: `Write acceptance criteria as abstract quality statements, NOT testable behaviors. Each criterion must describe a feeling, aspiration, or quality attribute — never an observable system action.
+
+STRICTLY FORBIDDEN words/phrases (do not use ANY of these): can, should, must, shall, will, displays, returns, validates, shows, appears, contains, includes, matches, remains, stays, becomes, loads, clears, resets, expires, triggers, redirects, navigates, responds, fails, succeeds, completes, prevents, blocks, stored, logged, saved, verified, checked, encrypted, hashed, authenticated, given, when, then, if, after, before, upon, user can, system, verify, ensure, confirm, allow, enable, disable.
+
+INSTEAD use phrases like: 'The experience feels intuitive', 'The flow is seamless', 'Performance meets expectations', 'Feedback is appropriate', 'The interaction feels natural', 'Quality is maintained throughout', 'The overall impression is professional'.
+
+Do NOT start any criterion with a verb. Do NOT describe what the system does. Only describe subjective qualities and aspirations.`,
     mode: 'single',
     models: ['openai:gpt-5-nano'],
   },

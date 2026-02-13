@@ -263,27 +263,16 @@ export function ProjectSidebar({
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2">
-            <Button 
-              variant="default" 
-              size="sm"
-              className="flex-1"
-              onClick={() => selectedPreset && onRunPreset?.(selectedPreset)}
-              disabled={!selectedPreset}
-            >
-              <Zap className="h-4 w-4 mr-1" />
-              Run Preset
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="flex-1"
-              onClick={onApplyPreset}
-              disabled={!selectedPreset}
-            >
-              Apply Only
-            </Button>
-          </div>
+          <Button 
+            variant="default" 
+            size="sm"
+            className="w-full"
+            onClick={() => selectedPreset && onRunPreset?.(selectedPreset)}
+            disabled={!selectedPreset}
+          >
+            <Zap className="h-4 w-4 mr-1" />
+            Run Preset
+          </Button>
         </CardContent>
       </Card>
 

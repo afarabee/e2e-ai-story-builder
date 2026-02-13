@@ -1895,23 +1895,25 @@ export function StoryBuilder({
 
       {/* Sticky DoR Status Bar */}
       {storyGenerated && !isGenerating && runs.length > 0 && runs[0]?.dor && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm shadow-[0_-2px_10px_rgba(0,0,0,0.08)]">
+        <div className={cn(
+          "fixed bottom-0 left-0 right-0 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] animate-dor-pulse",
+          runs[0].dor.passed
+            ? "bg-green-600 dark:bg-green-700"
+            : "bg-red-600 dark:bg-red-700"
+        )}>
           <div className="max-w-[900px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               {runs[0].dor.passed ? (
-                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                <CheckCircle className="h-5 w-5 text-white flex-shrink-0" />
               ) : (
-                <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                <XCircle className="h-5 w-5 text-white flex-shrink-0" />
               )}
               <div className="min-w-0">
-                <span className={cn(
-                  "text-sm font-semibold",
-                  runs[0].dor.passed ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
-                )}>
-                  Definition of Ready: {runs[0].dor.passed ? "Passed" : "Failed"}
+                <span className="text-sm font-bold text-white">
+                  Definition of Ready: {runs[0].dor.passed ? "Passed ✓" : "Failed ✗"}
                 </span>
                 {!runs[0].dor.passed && runs[0].dor.fail_reasons.length > 0 && (
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-xs text-white/80 truncate">
                     {runs[0].dor.fail_reasons[0]}
                   </p>
                 )}
@@ -1920,8 +1922,7 @@ export function StoryBuilder({
             {!runs[0].dor.passed && (
               <Button
                 size="sm"
-                variant="ai"
-                className="gap-2 flex-shrink-0"
+                className="gap-2 flex-shrink-0 bg-white text-red-700 font-bold hover:bg-white/90"
                 onClick={() => handleFixDoR(runs[0])}
                 disabled={fixingDoRRunIds.has(runs[0].run_id)}
               >

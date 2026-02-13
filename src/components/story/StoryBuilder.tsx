@@ -645,8 +645,8 @@ export function StoryBuilder({
     });
   };
 
-  // Typewriter helper: types text into a setter character by character
-  const typewriterType = (text: string, setter: React.Dispatch<React.SetStateAction<string>>, speed = 8): Promise<void> => {
+  // Typewriter helper: types text into a setter character by character, auto-scrolling the target element
+  const typewriterType = (text: string, setter: React.Dispatch<React.SetStateAction<string>>, speed = 8, elementId?: string): Promise<void> => {
     return new Promise((resolve) => {
       let i = 0;
       setter('');
@@ -654,11 +654,20 @@ export function StoryBuilder({
         if (typewriterAbortRef.current) {
           clearInterval(interval);
           setter(text); // finish immediately
+          if (elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.scrollTop = el.scrollHeight;
+          }
           resolve();
           return;
         }
         i++;
         setter(text.slice(0, i));
+        // Auto-scroll to keep latest text visible
+        if (elementId) {
+          const el = document.getElementById(elementId);
+          if (el) el.scrollTop = el.scrollHeight;
+        }
         if (i >= text.length) {
           clearInterval(interval);
           resolve();
@@ -714,11 +723,11 @@ export function StoryBuilder({
     setTypewriterActive(true);
 
     // Type rawInput
-    await typewriterType(preset.rawInput, setRawInput, 8);
+    await typewriterType(preset.rawInput, setRawInput, 8, 'raw-input');
 
     // Type customPrompt if present
     if (preset.customPrompt) {
-      await typewriterType(preset.customPrompt, setCustomPrompt, 6);
+      await typewriterType(preset.customPrompt, setCustomPrompt, 6, 'custom-prompt');
     }
 
     setTypewriterActive(false);

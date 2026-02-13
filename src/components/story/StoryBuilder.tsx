@@ -207,8 +207,14 @@ export function StoryBuilder({
   const [runInputModalOpen, setRunInputModalOpen] = useState(false);
   const [selectedRunForInput, setSelectedRunForInput] = useState<RunResponse | null>(null);
 
-  // Fix DoR state
-  const [fixingDoRRunIds, setFixingDoRRunIds] = useState<Set<string>>(new Set());
+   // Fix DoR state
+   const [fixingDoRRunIds, setFixingDoRRunIds] = useState<Set<string>>(new Set());
+
+   // Typewriter / Run Preset animation state
+   const [typewriterActive, setTypewriterActive] = useState(false);
+   const [generateButtonPulse, setGenerateButtonPulse] = useState(false);
+   const generateButtonRef = useRef<HTMLButtonElement>(null);
+   const typewriterAbortRef = useRef(false);
 
   // Auto-save state
   const [lastAutoSaveContent, setLastAutoSaveContent] = useState<string>('');
@@ -639,7 +645,29 @@ export function StoryBuilder({
     });
   };
 
-  // Run preset: apply + generate in one step, building request directly from preset object
+  // Typewriter helper: types text into a setter character by character
+  const typewriterType = (text: string, setter: React.Dispatch<React.SetStateAction<string>>, speed = 8): Promise<void> => {
+    return new Promise((resolve) => {
+      let i = 0;
+      setter('');
+      const interval = setInterval(() => {
+        if (typewriterAbortRef.current) {
+          clearInterval(interval);
+          setter(text); // finish immediately
+          resolve();
+          return;
+        }
+        i++;
+        setter(text.slice(0, i));
+        if (i >= text.length) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, speed);
+    });
+  };
+
+  // Run preset: typewriter animation → pause → pulse button → auto-generate
   const runPreset = async (presetId: string) => {
     const preset = PRESETS.find(p => p.id === presetId);
     if (!preset) {
@@ -651,43 +679,66 @@ export function StoryBuilder({
       return;
     }
 
+    // Reset abort flag
+    typewriterAbortRef.current = false;
+
+    // Clear previous results
+    setRuns([]);
+    setActiveModelId(null);
+    setHighlightedContent(null);
+    setHasDevNotes(false);
+    setDirtyCriteria(false);
+    setOriginalTitle("");
+    setOriginalDescription("");
+    setStory((prev) => ({
+      ...prev,
+      title: "",
+      description: "",
+      acceptanceCriteria: [],
+      storyPoints: 0,
+      status: "draft" as const,
+    }));
+    setTestData({ userInputs: [], edgeCases: [], apiResponses: [], codeSnippets: [] });
+
+    // Keep raw input area visible for typing animation
+    setShowRawInput(true);
+
+    // Set mode/models from preset
+    const mode = preset.mode ?? 'single';
+    setRunMode(mode);
+    if (preset.models?.[0]) {
+      setSelectedModel(preset.models[0]);
+    }
+
+    // --- Typewriter animation phase ---
+    setTypewriterActive(true);
+
+    // Type rawInput
+    await typewriterType(preset.rawInput, setRawInput, 8);
+
+    // Type customPrompt if present
+    if (preset.customPrompt) {
+      await typewriterType(preset.customPrompt, setCustomPrompt, 6);
+    }
+
+    setTypewriterActive(false);
+
+    // --- Pause for 2 seconds ---
+    await new Promise(r => setTimeout(r, 2000));
+
+    // --- Pulse the Generate button ---
+    setGenerateButtonPulse(true);
+    await new Promise(r => setTimeout(r, 1000));
+    setGenerateButtonPulse(false);
+
+    // --- Auto-generate ---
+    // Set saved state from preset
+    setSavedInput(preset.rawInput);
+    setSavedCustomPrompt(preset.customPrompt || '');
+
     try {
       setIsGenerating(true);
       setShowRawInput(false);
-
-      // Set UI state from preset
-      setRawInput(preset.rawInput);
-      setCustomPrompt(preset.customPrompt || '');
-      const mode = preset.mode ?? 'single';
-      setRunMode(mode);
-      if (preset.models?.[0]) {
-        setSelectedModel(preset.models[0]);
-      }
-      setSavedInput(preset.rawInput);
-      setSavedCustomPrompt(preset.customPrompt || '');
-
-      // Reset all previous run state (same as generateStory)
-      setRuns([]);
-      setActiveModelId(null);
-      setHighlightedContent(null);
-      setHasDevNotes(false);
-      setDirtyCriteria(false);
-      setOriginalTitle("");
-      setOriginalDescription("");
-      setStory((prev) => ({
-        ...prev,
-        title: "",
-        description: "",
-        acceptanceCriteria: [],
-        storyPoints: 0,
-        status: "draft" as const,
-      }));
-      setTestData({
-        userInputs: [],
-        edgeCases: [],
-        apiResponses: [],
-        codeSnippets: [],
-      });
 
       onStoryGenerated?.();
 
@@ -716,7 +767,7 @@ export function StoryBuilder({
         setActiveModelId(data.runs[0].model_id);
       }
 
-      // Update story state from first run (same as generateStory)
+      // Update story state from first run
       const run = data.runs[0];
       const finalStory = run.final_story;
       const generatedStory = {
@@ -1266,6 +1317,7 @@ export function StoryBuilder({
                 placeholder="Paste specs or click to upload reference files"
                 rows={4}
                 className="mt-2"
+                readOnly={typewriterActive}
               />
             </div>
 
@@ -1278,6 +1330,7 @@ export function StoryBuilder({
                 placeholder="Enter any specific instructions or tone for this story…"
                 rows={2}
                 className="mt-2"
+                readOnly={typewriterActive}
               />
             </div>
 
@@ -1396,10 +1449,11 @@ export function StoryBuilder({
             </div>
 
             <Button 
+              ref={generateButtonRef}
               onClick={generateStory} 
               variant={isGenerating ? "ai" : "default"}
-              disabled={isGenerating || !rawInput.trim()}
-              className="w-full gap-2"
+              disabled={isGenerating || !rawInput.trim() || typewriterActive}
+              className={cn("w-full gap-2", generateButtonPulse && "animate-btn-glow")}
             >
               {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {isGenerating ? "Generating…" : "Generate User Story"}

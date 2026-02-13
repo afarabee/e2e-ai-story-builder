@@ -5,10 +5,6 @@ import {
   Settings, 
   GitBranch, 
   FileText, 
-  RotateCcw,
-  Save,
-  Copy,
-  Eye,
   Zap,
   FlaskConical,
   PanelLeft
@@ -93,19 +89,7 @@ export default function AppLayout({
                 <PanelLeft className="h-4 w-4" />
               </Button>
             )}
-            <Button variant="ghost" size="icon-sm" title="Undo">
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon-sm" title="Save Draft">
-              <Save className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon-sm" title="Copy">
-              <Copy className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon-sm" title="Preview">
-              <Eye className="h-4 w-4" />
-            </Button>
-            <Button 
+            <Button
               variant="ghost" 
               size="icon-sm" 
               title="Settings"
